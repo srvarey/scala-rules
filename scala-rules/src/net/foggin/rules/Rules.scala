@@ -21,6 +21,8 @@ case class ~[+A, +B](_1 : A, _2 : B)
  */
 trait Rules {
   type Context
+  
+  val FAILURE = Failure[Context]
 
   /** Converts a function into a rule. */
   implicit def createRule[A](f : Context => Result[A, Context]) = new Rule[A] {
@@ -29,7 +31,7 @@ trait Rules {
 	  
   /** Converts a PartialFunction into a Rule. */
   implicit def partialFunctionToRule[A](pf : PartialFunction[Context, (A, Context)]) = createRule[A] {
-    pf andThen { case (a, ctx) => Success(a, ctx) } orElse { case ctx => Failure }
+    pf andThen { case (a, ctx) => Success(a, ctx) } orElse { case ctx => FAILURE }
   }
 
   /** Creates a Rule that always succeeds with the specified value. */
@@ -42,15 +44,15 @@ trait Rules {
    
     def flatMap[B](f : A => Context => Result[B, Context]) = mapRule[B] {
       case (_, Success(a, c2)) => f(a)(c2)
-      case _ => Failure
+      case _ => FAILURE
     }
 
     def map[B](f : A => B) = flatMap { a => ctx => Success(f(a), ctx) }
 
-    def filter(f : A => Boolean) = flatMap { a => ctx => if (f(a)) Success(a, ctx) else Failure }
+    def filter(f : A => Boolean) = flatMap { a => ctx => if (f(a)) Success(a, ctx) else FAILURE }
 
     def | [B >: A](alt : => Context => Result[B, Context]) = mapRule[B] { 
-      case (c1, Failure) => alt(c1)
+      case (c1, FAILURE) => alt(c1)
       case (_, success) => success
     }
 
@@ -58,7 +60,7 @@ trait Rules {
   
     def >>[B](f : A => Context => Result[B, Context]) = flatMap(f)
   
-    def ~[B](next : => Rule[B]) = for (a <- this; b <- next) yield rules.~(a, b)
+    def ~[B](next : => Rule[B]) = for (a <- this; b <- next) yield new ~(a, b)
   
     def ~-[B](next : => Rule[B]) = for (a <- this; b <- next) yield a
   
@@ -71,7 +73,7 @@ trait Rules {
     def * = createRule[List[A]] { c =>
       // tail-recursive function with reverse list accumulator
       def rep(acc : List[A], c : Context) : (List[A], Context) = apply(c) match {
-        case Failure => (acc, c)
+        case FAILURE => (acc, c)
         case Success(a, c) => rep(a :: acc, c)
       }
       rep(Nil, c) match { case (list, c) => Success(list.reverse, c) }
@@ -86,14 +88,14 @@ trait Rules {
     
     /** Creates a rule that suceeds only if this rule would fail on the given context. */
     def unary_! = mapRule { 
-      case (c, Failure) => Success(c, c) 
-      case _ => Failure
+      case (c, FAILURE) => Success(c, c) 
+      case _ => FAILURE
     }
      
     /** Creates a rule that suceeds if this rule would succeed but returns an unmodified context. */
     def unary_& = mapRule { 
       case (c, Success(_, _)) => Success(c, c) 
-      case _ => Failure
+      case _ => FAILURE
     }
   
     private def mapApply[B](f : (Context, Result[A, Context]) => B)(c : Context) = f(c, apply(c))
@@ -120,7 +122,7 @@ trait Rules {
    */
   def action(pf : PartialFunction[Context, Context]) = createRule { ctx => 
     if (pf isDefinedAt ctx) Success(pf(ctx), ctx)
-    else Failure
+    else FAILURE
   }
 
   def get[A](pf : PartialFunction[Context, A]) = for (ctx <- context if pf isDefinedAt ctx) yield pf(ctx)
@@ -132,6 +134,6 @@ trait Rules {
     */
   implicit def expect[A](rule : Rule[A]) : Context => A = (context) => rule(context) match {
     case Success(a, _) => a
-    case Failure => throw new RuleException(context, "Unexpected failure")
+    case FAILURE => throw new RuleException(context, "Unexpected failure")
   }
 }

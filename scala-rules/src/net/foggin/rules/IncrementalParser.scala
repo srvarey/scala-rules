@@ -12,7 +12,7 @@ trait MemoisableRules extends Rules {
 
 class EditableInput[A] extends Input[A, EditableInput[A]] with Memoisable[EditableInput[A]] {
   var index : Int = 0
-  var next : Result[A, EditableInput[A]] = Failure
+  var next : Result[A, EditableInput[A]] = Failure[EditableInput[A]]
   
   private val map = new scala.collection.mutable.HashMap[AnyRef, Result[Any, EditableInput[A]]]
   
@@ -22,8 +22,8 @@ class EditableInput[A] extends Input[A, EditableInput[A]] with Memoisable[Editab
       
       // only for debugging purposes
       result match {
-        case Failure =>
         case Success(value, element) => println(key + " -> " + value)
+        case _ =>
       }
       result
     }).asInstanceOf[Result[B, EditableInput[A]]]
@@ -70,8 +70,8 @@ class EditableInput[A] extends Input[A, EditableInput[A]] with Memoisable[Editab
   private def updateNext(index : Int, pos : Int, delete: Int, values : Iterator[A]) : EditableInput[A] = {
     this.index = index
     next = next match {
-      case Failure => Failure
       case Success(value, element) => Success(value, element.update(index + 1, pos, delete, values))
+      case failure => failure
     }
     this
   }
