@@ -8,8 +8,7 @@ trait Input[+A, Context] { self : Context =>
 class ArrayInput[A](val array : Array[A], val index : Int) extends Input[A, ArrayInput[A]] {
   def this(array : Array[A]) = this(array, 0)
   
-  def next = 
-      if (index >= array.length) Failure[ArrayInput[A]]
+  def next = if (index >= array.length) Failure[ArrayInput[A]]
       else Success(array(index), new ArrayInput[A](array, index + 1))
 }
 
