@@ -7,7 +7,7 @@ trait Memoisable[Context] {
 trait MemoisableRules extends Rules {
   type Context <: Memoisable[Context]
   
-  def memo[A](key : AnyRef, f : Context => Result[A, Context]) : Rule[A] = createRule[A] { ctx => ctx.memo(key, f) }
+  def memo[A](key : AnyRef, f : Context => Result[A]) : Rule[A] = createRule[A] { ctx => ctx.memo(key, f) }
 }
 
 class EditableInput[A] extends Input[A, EditableInput[A]] with Memoisable[EditableInput[A]] {
