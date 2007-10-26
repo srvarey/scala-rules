@@ -10,6 +10,8 @@ class ArrayInput[A](val array : Array[A], val index : Int) extends Input[A, Arra
   
   def next = if (index >= array.length) Failure[ArrayInput[A]]
       else Success(array(index), new ArrayInput[A](array, index + 1))
+      
+  override def toString = array.drop(index).mkString("\"", "", "\"")
 }
 
 
