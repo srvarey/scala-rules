@@ -44,6 +44,8 @@ class Rule[S, +A](f : S => Result[A, S]) extends (S => Result[A, S])
 
   def ^^[B](f : A => B) = map(f)
   
+  def ^^^[B](b : B) = map { any => b }
+  
   def >>[B](f : A => Rule[S, B]) = flatMap(f)
   
   def ~[B](next : => Rule[S, B]) = for (a <- this; b <- next) yield new ~(a, b)

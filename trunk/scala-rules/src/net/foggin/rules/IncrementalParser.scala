@@ -91,7 +91,7 @@ trait IncrementalEvaluator extends IncrementalScanner {
   lazy val factor : Rule[Int] = memo("factor", trim(number | '(' -~ expr ~- ')'))
   lazy val number = (digit+) ^^ literal ^^ (_ toInt)
   
-  private def op(r : Rule[Any], f : (Int, Int) => Int) = r ^^ { any => f }
+  private def op(r : Rule[Any], f : (Int, Int) => Int) = r ^^^ f
 
   def evaluate = {
     expect(expr ~- !item | exception("Invalid expression"))
