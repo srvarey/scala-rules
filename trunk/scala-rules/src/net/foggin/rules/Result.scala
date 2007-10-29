@@ -15,6 +15,8 @@ class RuleException[Context](val context : Context, message : String) extends Ex
    */
   sealed abstract class Result[+A, S] extends MonadPlus[A, Result.SM[S]#M] {
     def isSuccess : boolean
+    
+    def getOrElse[B >: A](alt : => B) : B
   }
     
   /** 
@@ -31,6 +33,8 @@ class RuleException[Context](val context : Context, message : String) extends Ex
       
     def flatMap[B](f : A => Result[B, S]) = f(value)
     def plus[B >: A](other : => Result[B, S]) = this
+    
+    def getOrElse[B >: A](alt : => B) = value
   }
     
   /** 
@@ -42,4 +46,6 @@ class RuleException[Context](val context : Context, message : String) extends Ex
     }
     
     def isSuccess = false
+    
+    def getOrElse[B](alt : => B) = alt
   }
