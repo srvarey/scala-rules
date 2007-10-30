@@ -5,47 +5,59 @@ import Character._
 abstract class ScalaScanner extends Scanner {
 
   val decimalDigit = range('0', '9') ^^ (_ - 48)
+  def decimal(n : Int) = decimalDigit ^^ (n * 10 + _)
+  def decimalN(n : Int) : Rule[Int] = decimal(n) >> decimalN | success(n)
+  
   val octalDigit = decimalDigit.filter(_ < 8)
+  def octal(n : Int) = octalDigit ^^ (n * 8 + _)
+  def octalN(n : Int) : Rule[Int] = octal(n) >> octalN | success(n)
+  
   val hexDigit = decimalDigit | range('A', 'F') ^^ (_ - 55) | range('a', 'f') ^^ (_ - 87)
-
-  val unicodeEscape = "\\u" -~ hexDigit >> hex >> hex >> hex ^^ { _.asInstanceOf[Char] }
-  val octalEscape = '\\' -~ octalDigit >> oct >> oct ^^ { _.asInstanceOf[Char] }
- 
-  def dec(n : Int) = decimalDigit ^^ (n * 10 + _)
-  def oct(n : Int) = octalDigit ^^ (n * 8 + _)
   def hex(n : Int) = hexDigit ^^ (n * 16 + _)
- 
-  def decN(n : Int) : Rule[Int] = dec(n) >> decN | success(n)
-  def octN(n : Int) : Rule[Int] = oct(n) >> octN | success(n)
   def hexN(n : Int) : Rule[Int] = hex(n) >> hexN | success(n)
 
+  val unicodeEscape = "\\u" -~ hexDigit >> hex >> hex >> hex ^^ { _.asInstanceOf[Char] }
+  val octalEscape = '\\' -~ octalDigit >> octal >> octal ^^ { _.asInstanceOf[Char] }
+ 
   val anyChar = unicodeEscape | octalEscape | item
+  val printableChar = !choice("\b\t\n\f\r") -~ item
   
   def unicode(category : Int) = anyChar filter (getType(_) == category)
   
-  val upper = anyChar filter isUpperCase
+  val parentheses = choice("()[]{}")
+  val delimiter = choice("`'\".;,")
+  val separator = parentheses | delimiter | whitespace
+  
+  val upper = choice("$_") | anyChar filter isUpperCase
   val lower = anyChar filter isLowerCase
+  val idChar = letter | digit | '$' | '_'
   val opChar = !choice(".()[]{}") -~ choice("!#%&*+-/:<=>?@\\^|~") | unicode(MATH_SYMBOL) | unicode(OTHER_SYMBOL)
   
   val op = opChar+
-  val idrest = !('_' ~ opChar) -~ (letter | digit *) ~ ('_' ~++ op ?) ^^ { case a ~ Some(b) => a ::: '_' :: b case a ~ None => a }
   val varid = lower ~++ idrest
   val plainid = upper ~++ idrest | varid | op
-  val id = (plainid | '`' -~ (anyChar+) ~- '`') ^^ literal
-    
-  val zero = elem('0')
+  val quotedid = '`' -~ (printableChar+) ~- '`'
+  val id = (plainid | quotedid) ^^ literal
+
+  lazy val idrest : Rule[List[Char]] = ('_' ~++ op) | idChar ~++ idrest | success(Nil)
+
+  val nonZero = decimalDigit filter (_ > 0)
   val hexNumeral = "0x" -~ hexDigit >> hexN
-  val octalNumeral = '0' -~ octalDigit >> octN
-  val decimal = decimalDigit >> decN
-  val decimalNumeral = '0' ^^^ 0 | decimal
+  val octalNumeral = '0' -~ octalDigit >> octalN
+  val decimalNumeral = nonZero >> decimalN | '0' ^^^ 0
   val integerLiteral = (hexNumeral | octalNumeral | decimalNumeral) ~- (choice("Ll")?)
-  val floatingPointLiteral = 
-    decimal ~- '.' ~ (decN(0)) ~ (exponentPart?) ~ (floatType?) ^^^ "123" |
-    '.' ~ decimal ~ (exponentPart?) ~ (floatType?) ^^^ "123" |
-    decimal ~ exponentPart ~ (floatType?) ^^^ "123" |
-    decimal ~ (exponentPart?) ~ floatType ^^^ "123"
-  val exponentPart = choice("eE") -~ (choice("+-")?) ~ decimal
-  val floatType = choice("fFdD")
+  
+  val intPart = decimalNumeral?
+  val floatPart = ('.'?) -~ (range('0', '9')*)
+  val optSign = '+' ^^^ 1 | '-' ^^^ -1 | success(1)
+  val exponentPart = choice("eE") -~ optSign ~ decimalNumeral ^^ { case sign ~ number => sign * number} ?
+  val floatType = choice("fFdD") ?
+      
+  val floatingPointLiteral = (intPart ~ floatPart ~ exponentPart ~ floatType) filter {
+    case None ~ Nil ~ _ ~ _ => false
+    case _ ~ Nil ~ None ~ None => false
+    case _ => true
+  }
 
   val booleanLiteral = "true" | "false"
 
@@ -59,9 +71,9 @@ abstract class ScalaScanner extends Scanner {
       "\\\'" ^^^ '\'' | 
       "\\\\" ^^^ '\\'
 
-  val characterLiteral = '\'' -~ (charEscapeSeq | !choice("\'\n\r\\") -~ anyChar) ~- '\''
+  val characterLiteral = '\'' -~ (charEscapeSeq | !choice("\'\\") -~ printableChar) ~- '\''
   val stringLiteral = 
-      '\"' -~ ((charEscapeSeq | !choice("\"\n\r\\") -~ anyChar)*) ~- '\"' ^^ literal |
+      '\"' -~ ((charEscapeSeq | !choice("\"\\") -~ printableChar)*) ~- '\"' ^^ literal |
       "\"\"\"" -~ ((!"\"\"\"" -~ anyChar)*) ~- "\"\"\"" ^^ literal
   val symbolLiteral = '\'' ~ plainid
   
@@ -69,7 +81,6 @@ abstract class ScalaScanner extends Scanner {
   
   val semi = (";" | newline) ~- (newline*)
    
-  //val name = idStart ~++ (idPart*) ^^ literal
   val operator = (opChar+) ^^ literal
   val special = choice(".()[]{}")
   val keyword = ("package" | "import" | "object" | "extends") ~- !(anyChar filter isJavaIdentifierPart)
