@@ -1,17 +1,54 @@
 package net.foggin.rules
 
 
-trait Input[+A, Context] { self : Context =>
+trait Input[+A, Context <: Input[A, Context]] extends Iterable[A] { self : Context =>
   def next : Result[A, Context]
+  
+  def elements = new Iterator[A] {
+    private var input : Context = Input.this
+    private var result = input.next
+   
+    def hasNext = result isSuccess
+    def next = {
+      val Success(value, input) = result
+      this.input = input
+      this.result = input.next
+      value
+    }
+  }
 }
+
 
 class ArrayInput[A](val array : Array[A], val index : Int) extends Input[A, ArrayInput[A]] {
   def this(array : Array[A]) = this(array, 0)
-  
-  def next = if (index >= array.length) Failure[ArrayInput[A]]
+ 
+  lazy val next = if (index >= array.length) Failure[ArrayInput[A]]
       else Success(array(index), new ArrayInput[A](array, index + 1))
-      
-  override def toString = array.drop(index).mkString("\"", "", "\"")
+     
+  override lazy val toString = elements.mkString("\"", "", "\"")
+}
+ 
+
+class IterableInput[A](iterator : Iterator[A]) extends Input[A, IterableInput[A]] {
+  def this(iterable : Iterable[A]) = this(iterable.elements)
+ 
+  lazy val next = if (!iterator.hasNext) Failure[IterableInput[A]]
+    else Success(iterator.next, new IterableInput(iterator))
+   
+  override lazy val toString = elements.mkString("\"", "", "\"")
+}
+ 
+
+/** View one type of input as another based on a transformation rule */
+class View[A, B, Context <: Input[A, Context]](
+    transform : Context => Result[B, Context],
+    val input : Context)
+    extends Input[B, View[A, B, Context]] {
+
+  def next = transform(input) match {
+    case Success(b, context) => Success(b, new View(transform, context))
+    case _ => Failure[View[A, B, Context]]
+  }
 }
 
 
@@ -32,6 +69,7 @@ trait Parser[A] extends Rules {
   def choice[C <% Seq[A]](seq : C) : Rule[A] =
       seq.map(elem(_)).reduceLeft[Rule[A]](_ | _)
 
+  def view[B](transform : Rule[B])(input : Context) = new View[A, B, Context](transform, input)
 }
 
    
@@ -44,9 +82,10 @@ trait Scanner extends Parser[Char] {
 
   def literal(seq : Seq[Any]) = seq.mkString("")
 
-  def letter = item filter (_ isLetter)
-  def digit = item filter (_ isDigit)
-  def whitespace = item filter (_ isWhitespace)*
+  import Character._
+  def letter = item filter isLetter
+  def digit = item filter isDigit
+  def whitespace = item filter isWhitespace *
   def newline = "\r\n" | "\n" | "\r"
 
   def trim[A](rule : Rule[A]) = whitespace -~ rule ~- whitespace
