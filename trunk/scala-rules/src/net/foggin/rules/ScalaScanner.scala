@@ -4,9 +4,9 @@ import Character._
 
 abstract class ScalaScanner extends Scanner {
 
-  val decimalDigit = choice("0123456789") ^^ (_ - 48)
+  val decimalDigit = range('0', '9') ^^ (_ - 48)
   val octalDigit = decimalDigit.filter(_ < 8)
-  val hexDigit = decimalDigit | choice("ABCDEF") ^^ (_ - 55) | choice("abcdef") ^^ (_ - 87)
+  val hexDigit = decimalDigit | range('A', 'F') ^^ (_ - 55) | range('a', 'f') ^^ (_ - 87)
 
   val unicodeEscape = "\\u" -~ hexDigit >> hex >> hex >> hex ^^ { _.asInstanceOf[Char] }
   val octalEscape = '\\' -~ octalDigit >> oct >> oct ^^ { _.asInstanceOf[Char] }
@@ -34,17 +34,17 @@ abstract class ScalaScanner extends Scanner {
   val id = (plainid | '`' -~ (anyChar+) ~- '`') ^^ literal
     
   val zero = elem('0')
-  //val digit = choice("0123456789")
-  val decimalNumeral = "0" | !zero -~ (digit+) ^^ literal
-  val hexNumeral = "0x" -~ (choice("0123456789abcdefABCDEF")+) ^^ literal
-  val octalNumeral = '0' -~ (choice("01234567")+) ^^ literal
-  val integerLiteral = (decimalNumeral | hexNumeral | octalNumeral) ~- (choice("Ll")?)
+  val hexNumeral = "0x" -~ hexDigit >> hexN
+  val octalNumeral = '0' -~ octalDigit >> octN
+  val decimal = decimalDigit >> decN
+  val decimalNumeral = '0' ^^^ 0 | decimal
+  val integerLiteral = (hexNumeral | octalNumeral | decimalNumeral) ~- (choice("Ll")?)
   val floatingPointLiteral = 
-    (digit+) ~- '.' ~ (digit*) ~ (exponentPart?) ~ (floatType?) ^^^ "123" |
-    '.' ~ (digit+) ~ (exponentPart?) ~ (floatType?) ^^^ "123" |
-    (digit+) ~ exponentPart ~ (floatType?) ^^^ "123" |
-    (digit+) ~ (exponentPart?) ~ floatType ^^^ "123"
-  val exponentPart = choice("eE") -~ (choice("+-")?) ~ (digit+)
+    decimal ~- '.' ~ (decN(0)) ~ (exponentPart?) ~ (floatType?) ^^^ "123" |
+    '.' ~ decimal ~ (exponentPart?) ~ (floatType?) ^^^ "123" |
+    decimal ~ exponentPart ~ (floatType?) ^^^ "123" |
+    decimal ~ (exponentPart?) ~ floatType ^^^ "123"
+  val exponentPart = choice("eE") -~ (choice("+-")?) ~ decimal
   val floatType = choice("fFdD")
 
   val booleanLiteral = "true" | "false"
