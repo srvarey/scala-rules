@@ -39,13 +39,13 @@ abstract class ScalaScanner extends Scanner {
   val quotedid = '`' -~ (printableChar+) ~- '`'
   val id = (plainid | quotedid) ^^ literal
 
-  lazy val idrest : Rule[List[Char]] = ('_' ~++ op) | idChar ~++ idrest | success(Nil)
+  lazy val idrest : Rule[List[Char]] = !idChar ^^^ Nil | ('_' ~++ op) ~- !idChar | idChar ~++ idrest
 
   val nonZero = decimalDigit filter (_ > 0)
   val hexNumeral = "0x" -~ hexDigit >> hexN
   val octalNumeral = '0' -~ octalDigit >> octalN
   val decimalNumeral = nonZero >> decimalN | '0' ^^^ 0
-  val integerLiteral = (hexNumeral | octalNumeral | decimalNumeral) ~- (choice("Ll")?)
+  val integerLiteral = (hexNumeral | octalNumeral | decimalNumeral) ~- (choice("Ll")?) ~- !idChar
   
   val intPart = decimalNumeral?
   val floatPart = ('.'?) -~ (range('0', '9')*)
@@ -83,9 +83,8 @@ abstract class ScalaScanner extends Scanner {
    
   val operator = (opChar+) ^^ literal
   val special = choice(".()[]{}")
-  val keyword = ("package" | "import" | "object" | "extends") ~- !(anyChar filter isJavaIdentifierPart)
+  val keyword = ("package" | "import" | "object" | "extends") ~- !idChar
   val other = (item filter { ch => !(ch isWhitespace) } +) ^^ literal
-  //val stringLiteral = '"' -~ (item filter (_ != '"')*) ~- '"' ^^ literal
 
   // note multi-line comments can nest
   lazy val comment : Rule[String] = "/*" -~ ((!"*/") -~ (comment | anyChar)).* ~- "*/" ^^ literal
@@ -100,11 +99,52 @@ abstract class IncrementalScalaScanner extends ScalaScanner with IncrementalScan
   val lines = view(line) _
 }
 
-object TestScalaScanner extends IncrementalScalaScanner with Application {
-  var input = new EditableInput[Char]
+object TestScalaScanner extends ScalaScanner with Application {
+  type Context = ArrayInput[Char]
+  
+  def check[A](actual : Result[A], expected : Result[A]) {
+    (expected, actual) match {
+      case (Success(ea, es), Success(aa, as)) if ea == aa && es.toString == as.toString => ()
+      case (e, a) if e == a => ()
+      case _ => error ("Expected: " + expected + "\nActual: " + actual)
+    }
+  }
+  
+  def checkFailure[A](rule : Rule[A])(input : String *) {
+    for (i <- input) check(rule(i), Failure[Context])
+  }
+  
+  def checkRule[A](rule : Rule[A])(expect : (String, Result[A]) *) {
+    for ((input, result) <- expect) check(rule(input), result)
+  }
+  
+  check(unicodeEscape("\\u0030"), Success('0', ""))
+  check(octalEscape("\\061"), Success('1', ""))
+  
+  implicit def anyToSuccess[A](a : A) : Result[A] = Success(a, "")
+  
+  implicit def tripleToSuccess[A](triple : ((String, A), String)) : (String, Result[A]) = 
+    triple match { case ((input, a), rest) => input -> Success(a, rest) }
+  
+  checkFailure(integerLiteral)("l", "L", "0x")
+  
+  checkRule(integerLiteral) (
+      "0l" -> 0,
+      "12 " -> 12 -> " ",
+      "012" -> 10,
+      "0x12" -> 18
+      )
+      
+   println("Scanner tests passed")
+}
 
-  //println(unicodeEscape("\\u0030"))
+object TestIncrementalScalaScanner extends IncrementalScalaScanner with Application {
+  
   //println(octalEscape("\\060"))
+
+
+  // do some incremental parsing
+  var input = new EditableInput[Char]
 
   def printTokens() {
     println; println("Tokens: ")
