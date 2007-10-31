@@ -60,34 +60,28 @@ abstract class ScalaScanner extends Scanner {
   val decimalNumeral = nonZero >> decimalN | '0' ^^^ 0
   val integerLiteral = (hexNumeral | octalNumeral | decimalNumeral) ~- (choice("Ll")?) ~- !idChar
   
-  val intPart = decimalNumeral ^^ (_ toString)
-  val floatPart = '.' ~++ (range('0', '9')*) ^^ literal
-  val optSign = choice("+-") ^^ (_ toString) | ""
-  val exponentPart = for (e <- choice("eE"); s <- optSign; n <- intPart) yield e + s + n
+  val intPart = decimalNumeral ^^ (_ toString) | ""
+  val floatPart = ('.' ~++ (range('0', '9')*) ^^ literal) | ""
+  val exponentPart = (for (e <- choice("eE"); s <- "+" | "-" | ""; n <- intPart) yield e + s + n) | ""
 
   val floatLiteral = for {
-    i <- intPart | ""
-    f <- floatPart | "" if i + f != "" 
-    e <- exponentPart | "" 
-    q <- choice("fF")
-  } yield i + f + e
+    i <- intPart; f <- floatPart 
+    val m = i + f if m != "" && m != "."
+    e <- exponentPart; q <- choice("fF")
+  } yield m + e
   
   val doubleLiteral = for {
-    i <- intPart | ""
-    f <- floatPart | "" if i + f != "" 
-    e <- exponentPart | "" 
-    q <- (choice("dD") ?)
-      if f != "" || e != "" || q != None
-  } yield i + f + e
+    i <- intPart; f <- floatPart 
+    val m = i + f if m != "" && m != "."
+    e <- exponentPart; q <- (choice("dD") ?)
+    if f != "" || e != "" || q != None
+  } yield m + e
   
   val booleanLiteral = "true" | "false"
 
   val charEscapeSeq = '\\' ~- ( choice("\"\'\\")
-      | 'b' ^^^ '\b'
-      | 't' ^^^ '\t'
-      | 'n' ^^^ '\n'
-      | 'f' ^^^ '\f'
-      | 'r' ^^^ '\r') 
+      | 'b' ^^^ '\b' | 't' ^^^ '\t' | 'n' ^^^ '\n'
+      | 'f' ^^^ '\f' | 'r' ^^^ '\r') 
 
   val charElement = charEscapeSeq | printableChar
   val characterLiteral = delimit(charElement, '\'')
@@ -97,7 +91,6 @@ abstract class ScalaScanner extends Scanner {
   
   val semi = (";" | newline) ~- (newline*)
    
-  //val keyword = ("package" | "import" | "object" | "extends") ~- !idChar
   val other = (item filter { ch => !(ch isWhitespace) } +) ^^ literal
 
   // note multi-line comments can nest
