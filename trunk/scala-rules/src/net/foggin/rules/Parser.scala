@@ -63,8 +63,8 @@ trait Parser[A] extends Rules {
 
   implicit def elem(a : A) = item filter (_ == a)
 
-  def readSeq[C <% Seq[A]](seq : C) : Rule[C] =
-      seq.map(elem(_)).reduceLeft[Rule[A]](_ -~ _) ^^^ seq
+  def readSeq[C <% Seq[A]](seq : C) : Rule[C] = if (seq isEmpty) success(seq)
+      else seq.map(elem(_)).reduceLeft[Rule[A]](_ -~ _) ^^^ seq
 
   def choice[C <% Seq[A]](seq : C) : Rule[A] =
       seq.map(elem(_)).reduceLeft[Rule[A]](_ | _)
@@ -85,8 +85,6 @@ trait Scanner extends Parser[Char] {
   def range(from : Char, to : Char) = item filter { ch => ch >= from && ch <= to }
 
   import Character._
-  def letter = item filter isLetter
-  def digit = item filter isDigit
   def whitespace = item filter isWhitespace *
   def newline = "\r\n" | "\n" | "\r"
 
