@@ -14,8 +14,8 @@ package net.foggin.rules
  */
 trait Rules {
   type Context
-  type Result[A] = rules.Result[A, Context]
-  type Rule[A] = rules.Rule[Context, A]
+  type Result[+A] = rules.Result[A, Context]
+  type Rule[+A] = rules.Rule[Context, A]
   
   /** Converts a function into a rule. */
   implicit def createRule[A](f : Context => Result[A]) = Rule(f)
