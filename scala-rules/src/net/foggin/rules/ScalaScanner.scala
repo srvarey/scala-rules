@@ -47,24 +47,20 @@ abstract class ScalaScanner extends Scanner {
   val decimalNumeral = nonZero >> decimalN | '0' ^^^ 0
   val integerLiteral = (hexNumeral | octalNumeral | decimalNumeral) ~- (choice("Ll")?) ~- !idChar
   
-  val intPart = decimalNumeral?
-  val floatPart = ('.'?) -~ (range('0', '9')*)
-  val optSign = '+' ^^^ 1 | '-' ^^^ -1 | success(1)
-  val exponentPart = choice("eE") -~ optSign ~ decimalNumeral ^^ { case sign ~ number => sign * number} ?
-  val floatType = choice("fFdD") ?
-   
-    
-  val floatingPointLiteral = (intPart ~ floatPart ~ exponentPart ~ floatType) filter {
-    case None ~ Nil ~ _ ~ _ => false        // need at least one of intPart and FloatPart
-    case _ ~ Nil ~ None ~ None => false  // need at least one of floatPart, exponentPart and floatType
-    case _ => true
-  } /* ^^ { case intDigits ~ floatDigits ~ exponent ~ suffix => 
-      intDigits.getOrElse(0) + 
-      floatDigits.mkString(".", "", "e") + 
-      exponent.getOrElse(0) +
-      suffix.getOrElse('d')
-  } */
-
+  val intPart = decimalNumeral ^^ (_ toString)
+  val floatPart = '.' ~++ (range('0', '9')*) ^^ literal
+  val mantissa = atLeastOneOf(intPart, floatPart)
+  val optSign = choice("+-") ^^ (_ toString) | ""
+  val exponentPart = (choice("eE") ~ append(optSign, intPart)) ^^ { case e ~ n => e + n }
+  val mantissaOptExponent = append(mantissa, exponentPart | "")
+  
+  def append(a : Rule[String], b : Rule[String]) = for (x <- a; y <- b) yield x + y
+  def atLeastOneOf(a : Rule[String], b : Rule[String]) = append(a, b) | a | b
+      
+  val floatLiteral = mantissaOptExponent ~- choice("fF")
+  val doubleLiteral = mantissaOptExponent ~- choice("dD") |
+    append(intPart | "", atLeastOneOf(floatPart, exponentPart))
+      
   
   val booleanLiteral = "true" | "false"
 
