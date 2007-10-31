@@ -46,10 +46,12 @@ trait Rules {
   
   
   def delimit[A](element : => Rule[A], delimiter : => Rule[Any]) = bracket(delimiter, element, delimiter)
-  def delimitN[A](element : => Rule[A], delimiter : => Rule[Any]) = bracketN(delimiter, element, delimiter)
+  def delimit_+[A](element : => Rule[A], delimiter : => Rule[Any]) = bracket_+(delimiter, element, delimiter)
+  def delimit_*[A](element : => Rule[A], delimiter : => Rule[Any]) = bracket_*(delimiter, element, delimiter)
   
   def bracket[A](open : => Rule[Any], element : => Rule[A], close : => Rule[Any]) : Rule[A] = open -~ !close -~ element ~- close
-  def bracketN[A](open : => Rule[Any], element : => Rule[A], close : => Rule[Any]) : Rule[List[A]] = open -~ (!close -~ element *) ~- close
-  
+  def bracket_+[A](open : => Rule[Any], element : => Rule[A], close : => Rule[Any]) : Rule[List[A]] = open -~ (!close -~ element +) ~- close
+  def bracket_*[A](open : => Rule[Any], element : => Rule[A], close : => Rule[Any]) : Rule[List[A]] = open -~ (!close -~ element *) ~- close
+
 
 }
