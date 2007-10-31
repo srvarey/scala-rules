@@ -31,12 +31,12 @@ abstract class ScalaScanner extends Scanner {
   val upper = choice("$_") | anyChar filter isUpperCase
   val lower = anyChar filter isLowerCase
   val idChar = letter | digit | '$' | '_'
-  val opChar = !choice(".()[]{}") -~ choice("!#%&*+-/:<=>?@\\^|~") | unicode(MATH_SYMBOL) | unicode(OTHER_SYMBOL)
+  val opChar = choice("!#%&*+-/:<=>?@\\^|~") | unicode(MATH_SYMBOL) | unicode(OTHER_SYMBOL)
   
   val op = opChar+
   val varid = lower ~++ idrest
   val plainid = upper ~++ idrest | varid | op
-  val quotedid = delimit(printableChar+, '`')
+  val quotedid = delimit_+(printableChar, '`')
   val id = (plainid | quotedid) ^^ literal
 
   lazy val idrest : Rule[List[Char]] = !idChar ^^^ Nil | ('_' ~++ op) ~- !idChar | idChar ~++ idrest
@@ -77,25 +77,23 @@ abstract class ScalaScanner extends Scanner {
 
   val charElement = unicodeEscape | octalEscape | charEscapeSeq | printableChar
   val characterLiteral = delimit(charElement, '\'')
-  val stringLiteral = delimitN(charElement, '\"') | delimitN(anyChar, "\"\"\"")
+  val stringLiteral = (delimit_*(charElement, '\"') | delimit_*(anyChar, "\"\"\"")) ^^ literal
   val symbolLiteral = '\'' ~ plainid
   
   
   val semi = (";" | newline) ~- (newline*)
    
-  val operator = (opChar+) ^^ literal
-  val special = choice(".()[]{}")
-  val keyword = ("package" | "import" | "object" | "extends") ~- !idChar
+  //val keyword = ("package" | "import" | "object" | "extends") ~- !idChar
   val other = (item filter { ch => !(ch isWhitespace) } +) ^^ literal
 
   // note multi-line comments can nest
-  lazy val multiLineComment : Rule[String] = bracketN("/*", multiLineComment | anyChar, "*/") ^^ literal
-  val lineComment : Rule[String] = bracketN("//", item, newline.unary_&) ^^ literal
+  lazy val multiLineComment : Rule[String] = bracket_*("/*", multiLineComment | anyChar, "*/") ^^ literal
+  val lineComment : Rule[String] = bracket_*("//", item, newline.unary_&) ^^ literal
   val comment = lineComment | multiLineComment
 }
 
 abstract class IncrementalScalaScanner extends ScalaScanner with IncrementalScanner {
-  val token = memo("token", (whitespace?) -~ (special | keyword | stringLiteral | comment | id | other))
+  val token = memo("token", (whitespace?) -~ (parentheses | stringLiteral | comment | id | delimiter| other))
   val tokens = view(token) _
 
   val line = memo("line", newline ^^^ "" | (!newline -~ item +) ~- (newline?) ^^ literal)
@@ -105,29 +103,31 @@ abstract class IncrementalScalaScanner extends ScalaScanner with IncrementalScan
 object TestScalaScanner extends ScalaScanner with Application {
   type Context = ArrayInput[Char]
   
-  def check[A](actual : Result[A], expected : Result[A]) {
+  def check[A](input : String, actual : Result[A], expected : Result[A]) {
     (expected, actual) match {
       case (Success(ea, es), Success(aa, as)) if ea == aa && es.toString == as.toString => ()
       case (e, a) if e == a => ()
-      case _ => error ("Expected: " + expected + "\nActual: " + actual)
+      case _ => error ("Input: " + input + 
+        "\nExpected result: " + expected + 
+        "\nActual result: " + actual)
     }
   }
   
   def checkFailure[A](rule : Rule[A])(input : String *) {
-    for (i <- input) check(rule(i), Failure[Context])
+    for (i <- input) check(i, rule(i), Failure[Context])
   }
   
   def checkRule[A](rule : Rule[A])(expect : (String, Result[A]) *) {
-    for ((input, result) <- expect) check(rule(input), result)
+    for ((input, result) <- expect) check(input, rule(input), result)
   }
-  
-  check(unicodeEscape("\\u0030"), Success('0', ""))
-  check(octalEscape("\\061"), Success('1', ""))
   
   implicit def anyToSuccess[A](a : A) : Result[A] = Success(a, "")
   
   implicit def tripleToSuccess[A](triple : ((String, A), String)) : (String, Result[A]) = 
     triple match { case ((input, a), rest) => input -> Success(a, rest) }
+  
+  checkRule(unicodeEscape)("\\u0030" -> '0')
+  checkRule(octalEscape)("\\061" -> '1')
   
   checkFailure(integerLiteral)("l", "L", "0x")
   
@@ -138,6 +138,14 @@ object TestScalaScanner extends ScalaScanner with Application {
       "0x12" -> 18
       )
       
+  checkFailure(opChar)(".", ";", "(", "[", "}")
+  
+  checkRule(opChar) (
+      "+" -> '+',
+      "-" -> '-',
+      "*" -> '*',
+      "/" -> '/')
+   
    println("Scanner tests passed")
 }
 
