@@ -4,23 +4,34 @@ import Character._
 
 abstract class ScalaScanner extends Scanner {
 
-  val decimalDigit = range('0', '9') ^^ (_ - 48)
-  def decimal(n : Int) = decimalDigit ^^ (n * 10 + _)
-  def decimalN(n : Int) : Rule[Int] = decimal(n) >> decimalN | success(n)
+  // NB "lazy" is missing from my version of the language specification
+  val reserved = Set("abstract", "case", "catch", "class", "def",
+      "do", "else", "extends", "false", "final", 
+      "finally", "for", "forSome", "if", "implicit", 
+      "import", "lazy", "match", "new", "null", "object", 
+      "override", "package", "private", "protected", "requires", 
+      "return", "sealed", "super", "this", "throw", 
+      "trait", "try", "true", "type", "val", "var", "while", "with", "yield", 
+      "_", ":", "=", "=>", "<-", "<:", "<%", ">:", "#", "@", "\u21D2")
+  
+  
+  val decimalDigit = range('0', '9') ^^ (_ - 48L)
+  def decimal(n : Long) = decimalDigit ^^ (n * 10 + _)
+  def decimalN(n : Long) : Rule[Long] = decimal(n) >> decimalN | success(n)
   
   val octalDigit = decimalDigit.filter(_ < 8)
-  def octal(n : Int) = octalDigit ^^ (n * 8 + _)
-  def octalN(n : Int) : Rule[Int] = octal(n) >> octalN | success(n)
+  def octal(n : Long) = octalDigit ^^ (n * 8 + _)
+  def octalN(n : Long) : Rule[Long] = octal(n) >> octalN | success(n)
   
-  val hexDigit = decimalDigit | range('A', 'F') ^^ (_ - 55) | range('a', 'f') ^^ (_ - 87)
-  def hex(n : Int) = hexDigit ^^ (n * 16 + _)
-  def hexN(n : Int) : Rule[Int] = hex(n) >> hexN | success(n)
+  val hexDigit = decimalDigit | range('A', 'F') ^^ (_ - 55L) | range('a', 'f') ^^ (_ - 87L)
+  def hex(n : Long) = hexDigit ^^ (n * 16 + _)
+  def hexN(n : Long) : Rule[Long] = hex(n) >> hexN | success(n)
 
   val unicodeEscape = "\\u" -~ hexDigit >> hex >> hex >> hex ^^ { _.asInstanceOf[Char] }
   val octalEscape = '\\' -~ octalDigit >> octal >> octal ^^ { _.asInstanceOf[Char] }
  
   val anyChar = unicodeEscape | octalEscape | item
-  val printableChar = !choice("\b\t\n\f\r") -~ item
+  val printableChar = !choice("\b\t\n\f\r") -~ anyChar
   
   def unicode(category : Int) = anyChar filter (getType(_) == category)
   
@@ -28,18 +39,20 @@ abstract class ScalaScanner extends Scanner {
   val delimiter = choice("`'\".;,")
   val separator = parentheses | delimiter | whitespace
   
-  val upper = choice("$_") | anyChar filter isUpperCase
+  val letter = anyChar filter isLetter
+  val digit = anyChar filter isDigit
   val lower = anyChar filter isLowerCase
-  val idChar = letter | digit | '$' | '_'
-  val opChar = choice("!#%&*+-/:<=>?@\\^|~") | unicode(MATH_SYMBOL) | unicode(OTHER_SYMBOL)
+  val idStart = choice("$_") | letter
+  val idChar = idStart | digit
+  val opChar = unicode(MATH_SYMBOL) | unicode(OTHER_SYMBOL) | choice("!#%&*+-/:<=>?@\\^|~")
   
   val op = opChar+
-  val varid = lower ~++ idrest
-  val plainid = upper ~++ idrest | varid | op
-  val quotedid = delimit_+(printableChar, '`')
-  val id = (plainid | quotedid) ^^ literal
+  val varid = lower ~++ idRest
+  val plainid = (op | varid | idStart ~++ idRest | varid | op) ^^ literal filter (!reserved.contains(_))
+  val quoteid = delimit_+(printableChar, '`') ^^ literal
+  val id = plainid | quoteid
 
-  lazy val idrest : Rule[List[Char]] = !idChar ^^^ Nil | ('_' ~++ op) ~- !idChar | idChar ~++ idrest
+  lazy val idRest : Rule[List[Char]] = !idChar ^^^ Nil | ('_' ~++ op) ~- !idChar | idChar ~++ idRest
 
   val nonZero = decimalDigit filter (_ > 0)
   val hexNumeral = "0x" -~ hexDigit >> hexN
@@ -49,18 +62,23 @@ abstract class ScalaScanner extends Scanner {
   
   val intPart = decimalNumeral ^^ (_ toString)
   val floatPart = '.' ~++ (range('0', '9')*) ^^ literal
-  val mantissa = atLeastOneOf(intPart, floatPart)
   val optSign = choice("+-") ^^ (_ toString) | ""
-  val exponentPart = (choice("eE") ~ append(optSign, intPart)) ^^ { case e ~ n => e + n }
-  val mantissaOptExponent = append(mantissa, exponentPart | "")
+  val exponentPart = for (e <- choice("eE"); s <- optSign; n <- intPart) yield e + s + n
+
+  val floatLiteral = for {
+    i <- intPart | ""
+    f <- floatPart | "" if i + f != "" 
+    e <- exponentPart | "" 
+    q <- choice("fF")
+  } yield i + f + e
   
-  def append(a : Rule[String], b : Rule[String]) = for (x <- a; y <- b) yield x + y
-  def atLeastOneOf(a : Rule[String], b : Rule[String]) = append(a, b) | a | b
-      
-  val floatLiteral = mantissaOptExponent ~- choice("fF")
-  val doubleLiteral = mantissaOptExponent ~- choice("dD") |
-    append(intPart | "", atLeastOneOf(floatPart, exponentPart))
-      
+  val doubleLiteral = for {
+    i <- intPart | ""
+    f <- floatPart | "" if i + f != "" 
+    e <- exponentPart | "" 
+    q <- (choice("dD") ?)
+      if f != "" || e != "" || q != None
+  } yield i + f + e
   
   val booleanLiteral = "true" | "false"
 
@@ -71,7 +89,7 @@ abstract class ScalaScanner extends Scanner {
       | 'f' ^^^ '\f'
       | 'r' ^^^ '\r') 
 
-  val charElement = unicodeEscape | octalEscape | charEscapeSeq | printableChar
+  val charElement = charEscapeSeq | printableChar
   val characterLiteral = delimit(charElement, '\'')
   val stringLiteral = (delimit_*(charElement, '\"') | delimit_*(anyChar, "\"\"\"")) ^^ literal
   val symbolLiteral = '\'' ~ plainid
@@ -122,8 +140,10 @@ object TestScalaScanner extends ScalaScanner with Application {
   implicit def tripleToSuccess[A](triple : ((String, A), String)) : (String, Result[A]) = 
     triple match { case ((input, a), rest) => input -> Success(a, rest) }
   
-  checkRule(unicodeEscape)("\\u0030" -> '0')
+  checkRule(unicodeEscape)("\\u0030" -> '0', "\\u21D2" -> '\u21D2')
   checkRule(octalEscape)("\\061" -> '1')
+  checkRule(anyChar)("\\u0030" -> '0', "\\u21D2" -> '\u21D2')
+  checkRule(opChar)("\\u21D2" -> '\u21D2')
   
   checkFailure(integerLiteral)("l", "L", "0x")
   
@@ -131,8 +151,7 @@ object TestScalaScanner extends ScalaScanner with Application {
       "0l" -> 0,
       "12 " -> 12 -> " ",
       "012" -> 10,
-      "0x12" -> 18
-      )
+      "0x12" -> 18)
       
   checkFailure(opChar)(".", ";", "(", "[", "}")
   
@@ -142,7 +161,28 @@ object TestScalaScanner extends ScalaScanner with Application {
       "*" -> '*',
       "/" -> '/')
    
-   println("Scanner tests passed")
+  // check reserved words aren't ids
+  checkFailure(id)(reserved.toList : _*)
+  
+  checkRule(id)(
+      "`yield`" -> "yield", 
+      "yield1" -> "yield1", 
+      "yield_+" -> "yield_+",
+      "`\\u21D2`" -> "\u21D2")
+
+  checkRule(floatLiteral)(
+      "1f" -> "1", 
+      "1.0F" -> "1.0", 
+      "1.e2F" -> "1.e2",
+      ".12E3f" -> ".12E3")
+
+  checkRule(doubleLiteral)(
+      "1D" -> "1", 
+      "1.0" -> "1.0", 
+      "1e2" -> "1e2",
+      ".12E3D" -> ".12E3")
+
+  println("Scanner tests passed")
 }
 
 object TestIncrementalScalaScanner extends IncrementalScalaScanner with Application {
