@@ -36,7 +36,7 @@ abstract class ScalaScanner extends Scanner {
   val op = opChar+
   val varid = lower ~++ idrest
   val plainid = upper ~++ idrest | varid | op
-  val quotedid = '`' -~ (printableChar+) ~- '`'
+  val quotedid = delimit(printableChar+, '`')
   val id = (plainid | quotedid) ^^ literal
 
   lazy val idrest : Rule[List[Char]] = !idChar ^^^ Nil | ('_' ~++ op) ~- !idChar | idChar ~++ idrest
@@ -52,32 +52,34 @@ abstract class ScalaScanner extends Scanner {
   val optSign = '+' ^^^ 1 | '-' ^^^ -1 | success(1)
   val exponentPart = choice("eE") -~ optSign ~ decimalNumeral ^^ { case sign ~ number => sign * number} ?
   val floatType = choice("fFdD") ?
-      
+   
+    
   val floatingPointLiteral = (intPart ~ floatPart ~ exponentPart ~ floatType) filter {
-    case None ~ Nil ~ _ ~ _ => false
-    case _ ~ Nil ~ None ~ None => false
+    case None ~ Nil ~ _ ~ _ => false        // need at least one of intPart and FloatPart
+    case _ ~ Nil ~ None ~ None => false  // need at least one of floatPart, exponentPart and floatType
     case _ => true
-  }
+  } /* ^^ { case intDigits ~ floatDigits ~ exponent ~ suffix => 
+      intDigits.getOrElse(0) + 
+      floatDigits.mkString(".", "", "e") + 
+      exponent.getOrElse(0) +
+      suffix.getOrElse('d')
+  } */
 
+  
   val booleanLiteral = "true" | "false"
 
-  val charEscapeSeq = 
-      "\\b" ^^^ '\b' | 
-      "\\t" ^^^ '\t' | 
-      "\\n" ^^^ '\n' | 
-      "\\f" ^^^ '\f' | 
-      "\\r" ^^^ '\r' | 
-      "\\\"" ^^^ '\"' | 
-      "\\\'" ^^^ '\'' | 
-      "\\\\" ^^^ '\\'
+  val charEscapeSeq = '\\' ~- ( choice("\"\'\\")
+      | 'b' ^^^ '\b'
+      | 't' ^^^ '\t'
+      | 'n' ^^^ '\n'
+      | 'f' ^^^ '\f'
+      | 'r' ^^^ '\r') 
 
-  val characterLiteral = '\'' -~ (charEscapeSeq | !choice("\'\\") -~ printableChar) ~- '\''
-  val stringLiteral = 
-      '\"' -~ ((charEscapeSeq | !choice("\"\\") -~ printableChar)*) ~- '\"' ^^ literal |
-      "\"\"\"" -~ ((!"\"\"\"" -~ anyChar)*) ~- "\"\"\"" ^^ literal
+  val charElement = unicodeEscape | octalEscape | charEscapeSeq | printableChar
+  val characterLiteral = delimit(charElement, '\'')
+  val stringLiteral = delimitN(charElement, '\"') | delimitN(anyChar, "\"\"\"")
   val symbolLiteral = '\'' ~ plainid
   
-  val lineComment = "//" -~ ((!newline -~ item)*)
   
   val semi = (";" | newline) ~- (newline*)
    
@@ -87,8 +89,9 @@ abstract class ScalaScanner extends Scanner {
   val other = (item filter { ch => !(ch isWhitespace) } +) ^^ literal
 
   // note multi-line comments can nest
-  lazy val comment : Rule[String] = "/*" -~ ((!"*/") -~ (comment | anyChar)).* ~- "*/" ^^ literal
-
+  lazy val multiLineComment : Rule[String] = bracketN("/*", multiLineComment | anyChar, "*/") ^^ literal
+  val lineComment : Rule[String] = bracketN("//", item, newline.unary_&) ^^ literal
+  val comment = lineComment | multiLineComment
 }
 
 abstract class IncrementalScalaScanner extends ScalaScanner with IncrementalScanner {
