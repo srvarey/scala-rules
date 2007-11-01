@@ -4,15 +4,63 @@ import Character._
 
 abstract class ScalaScanner extends Scanner {
 
-  // NB "lazy" is missing from my version of the language specification
-  val reserved = Set("abstract", "case", "catch", "class", "def",
-      "do", "else", "extends", "false", "final", 
-      "finally", "for", "forSome", "if", "implicit", 
-      "import", "lazy", "match", "new", "null", "object", 
-      "override", "package", "private", "protected", "requires", 
-      "return", "sealed", "super", "this", "throw", 
-      "trait", "try", "true", "type", "val", "var", "while", "with", "yield", 
-      "_", ":", "=", "=>", "<-", "<:", "<%", ">:", "#", "@", "\u21D2")
+  // reserved keywords and operators
+  private val reserved = scala.collection.mutable.Map.empty[String, Rule[String]]
+      
+  private def keyword(name : String) = reserved.getOrElseUpdate(name, name ~- !idChar)
+  private def reservedOp(name : String) = reserved.getOrElseUpdate(name, name ~- !opChar)
+  
+  val `abstract` = keyword("abstract")
+  val `case` = keyword("case")
+  val `catch` = keyword("catch")
+  val `class` = keyword("class")
+  val `def` = keyword("def")
+  val `do` = keyword("do")
+  val `else` = keyword("else")
+  val `extends` = keyword("extends")
+  val `false` = keyword("false")
+  val `final` = keyword("final")
+  val `finally` = keyword("finally")
+  val `for` = keyword("for")
+  val `forSome` = keyword("forSome")
+  val `if` = keyword("if")
+  val `implicit` = keyword("implicit")
+  val `import` = keyword("import")
+  val `lazy` = keyword("lazy") // NB "lazy" is missing from the list in language specification 2.6.0
+  val `match` = keyword("match")
+  val `new` = keyword("new")
+  val `null` = keyword("null")
+  val `object` = keyword("object")
+  val `override` = keyword("override")
+  val `package` = keyword("package")
+  val `private` = keyword("private")
+  val `protected` = keyword("protected")
+  val `requires` = keyword("requires")
+  val `return` = keyword("return")
+  val `sealed` = keyword("sealed")
+  val `super` = keyword("super")
+  val `this` = keyword("this")
+  val `throw` = keyword("throw")
+  val `trait` = keyword("trait")
+  val `try` = keyword("try")
+  val `true` = keyword("true")
+  val `type` = keyword("type")
+  val `val` = keyword("val")
+  val `var` = keyword("var")
+  val `while` = keyword("while")
+  val `with` = keyword("with")
+  val `yield` = keyword("yield")
+  
+  val `_` = reservedOp("_")
+  val `:` = reservedOp(":")
+  val `=` = reservedOp("=")
+  val `=>` = reservedOp("=>") | reservedOp("\u21D2")
+  val `<-` = reservedOp("<-")
+  val `<:` = reservedOp("<:")
+  val `<%` = reservedOp("<%")
+  val `>:` = reservedOp(">:")
+  val `#` = reservedOp("#")
+  val `@` = reservedOp("@")
   
   
   val decimalDigit = range('0', '9') ^^ (_ - 48L)
@@ -30,6 +78,10 @@ abstract class ScalaScanner extends Scanner {
   val unicodeEscape = "\\u" -~ hexDigit >> hex >> hex >> hex ^^ { _.asInstanceOf[Char] }
   val octalEscape = '\\' -~ octalDigit >> octal >> octal ^^ { _.asInstanceOf[Char] }
  
+  val charEscapeSeq = '\\' ~- ( choice("\"\'\\")
+      | 'b' ^^^ '\b' | 't' ^^^ '\t' | 'n' ^^^ '\n'
+      | 'f' ^^^ '\f' | 'r' ^^^ '\r') 
+
   val anyChar = unicodeEscape | octalEscape | item
   val printableChar = !choice("\b\t\n\f\r") -~ anyChar
   
@@ -49,7 +101,8 @@ abstract class ScalaScanner extends Scanner {
   val op = opChar+
   val varid = lower ~++ idRest
   val plainid = (op | varid | idStart ~++ idRest | varid | op) ^^ literal filter (!reserved.contains(_))
-  val quoteid = delimit_+(printableChar, '`') ^^ literal
+  val quoteid = ('`' -~ (!'`' -~ printableChar +) ~- '`') ^^ literal
+  //val quoteid = ('`' -~ printableChar +~- '`') ^^ literal
   val id = plainid | quoteid
 
   lazy val idRest : Rule[List[Char]] = !idChar ^^^ Nil | ('_' ~++ op) ~- !idChar | idChar ~++ idRest
@@ -79,13 +132,9 @@ abstract class ScalaScanner extends Scanner {
   
   val booleanLiteral = "true" | "false"
 
-  val charEscapeSeq = '\\' ~- ( choice("\"\'\\")
-      | 'b' ^^^ '\b' | 't' ^^^ '\t' | 'n' ^^^ '\n'
-      | 'f' ^^^ '\f' | 'r' ^^^ '\r') 
-
   val charElement = charEscapeSeq | printableChar
-  val characterLiteral = delimit(charElement, '\'')
-  val stringLiteral = (delimit_*(charElement, '\"') | delimit_*(anyChar, "\"\"\"")) ^^ literal
+  val characterLiteral = '\'' -~ (charElement - '\'') ~- '\''
+  val stringLiteral = ('\"' -~ charElement *~- '\"' | "\"\"\"" -~ anyChar *~- "\"\"\"") ^^ literal
   val symbolLiteral = '\'' ~ plainid
   
   
@@ -94,8 +143,8 @@ abstract class ScalaScanner extends Scanner {
   val other = (item filter { ch => !(ch isWhitespace) } +) ^^ literal
 
   // note multi-line comments can nest
-  lazy val multiLineComment : Rule[String] = bracket_*("/*", multiLineComment | anyChar, "*/") ^^ literal
-  val lineComment : Rule[String] = bracket_*("//", item, newline.unary_&) ^^ literal
+  lazy val multiLineComment : Rule[String] = ("/*" -~ (multiLineComment | anyChar) *~- "*/") ^^ literal
+  val lineComment : Rule[String] = "//" -~ (item - newline *) ^^ literal
   val comment = lineComment | multiLineComment
 }
 
@@ -156,6 +205,8 @@ object TestScalaScanner extends ScalaScanner with Application {
    
   // check reserved words aren't ids
   checkFailure(id)(reserved.toList : _*)
+  
+  checkRule(quoteid)("`yield`" -> "yield")
   
   checkRule(id)(
       "`yield`" -> "yield", 

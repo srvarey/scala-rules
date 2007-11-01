@@ -80,4 +80,9 @@ class Rule[S, +A](f : S => Result[A, S]) extends (S => Result[A, S])
   /** Creates a rule that suceeds if this rule would succeed but returns an unmodified context. 
    * N.B. won't work properly because of deprecated syntax for unapplied method? */
   def unary_& = for (s <- Rule.get[S] if apply(s).isSuccess) yield s
+  
+  def -(exclude : => Rule[S, Any]) = !exclude -~ this
+    
+  def *~-(end : => Rule[S, Any]) = (this - end *) ~- end
+  def +~-(end : => Rule[S, Any]) = (this - end +) ~- end
 }
