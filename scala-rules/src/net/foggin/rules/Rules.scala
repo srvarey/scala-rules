@@ -44,14 +44,9 @@ trait Rules {
     case _ => throw new RuleException(context, "Unexpected failure")
   }
   
-  
-  def delimit[A](element : => Rule[A], delimiter : => Rule[Any]) = bracket(delimiter, element, delimiter)
-  def delimit_+[A](element : => Rule[A], delimiter : => Rule[Any]) = bracket_+(delimiter, element, delimiter)
-  def delimit_*[A](element : => Rule[A], delimiter : => Rule[Any]) = bracket_*(delimiter, element, delimiter)
-  
-  def bracket[A](open : => Rule[Any], element : => Rule[A], close : => Rule[Any]) : Rule[A] = open -~ !close -~ element ~- close
-  def bracket_+[A](open : => Rule[Any], element : => Rule[A], close : => Rule[Any]) : Rule[List[A]] = open -~ (!close -~ element +) ~- close
-  def bracket_*[A](open : => Rule[Any], element : => Rule[A], close : => Rule[Any]) : Rule[List[A]] = open -~ (!close -~ element *) ~- close
+  def select[A](rules : Collection[Rule[A]]) : Rule[A] =
+    rules.reduceLeft[Rule[A]](_ | _)
 
 
+  
 }
