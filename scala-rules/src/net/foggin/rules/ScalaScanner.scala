@@ -5,10 +5,11 @@ import Character._
 abstract class ScalaScanner extends Scanner {
 
   // reserved keywords and operators
-  private val reserved = scala.collection.mutable.Map.empty[String, Rule[String]]
+  val keywords = scala.collection.mutable.Map.empty[String, Rule[String]]
+  val reservedOps = scala.collection.mutable.Map.empty[String, Rule[String]]
       
-  private def keyword(name : String) = reserved.getOrElseUpdate(name, name ~- !idChar)
-  private def reservedOp(name : String) = reserved.getOrElseUpdate(name, name ~- !opChar)
+  private def keyword(name : String) = keywords.getOrElseUpdate(name, name ~- !idChar)
+  private def reservedOp(name : String) = reservedOps.getOrElseUpdate(name, name ~- !opChar)
   
   val `abstract` = keyword("abstract")
   val `case` = keyword("case")
@@ -50,8 +51,8 @@ abstract class ScalaScanner extends Scanner {
   val `while` = keyword("while")
   val `with` = keyword("with")
   val `yield` = keyword("yield")
+  val `_` = keyword("_")
   
-  val `_` = reservedOp("_")
   val `:` = reservedOp(":")
   val `=` = reservedOp("=")
   val `=>` = reservedOp("=>") | reservedOp("\u21D2")
@@ -91,21 +92,22 @@ abstract class ScalaScanner extends Scanner {
   val delimiter = choice("`'\".;,")
   val separator = parentheses | delimiter | whitespace
   
-  val letter = anyChar filter isLetter
+  val letter = choice("$_") | anyChar filter isLetter
   val digit = anyChar filter isDigit
   val lower = anyChar filter isLowerCase
-  val idStart = choice("$_") | letter
-  val idChar = idStart | digit
+  val idChar = letter | digit
   val opChar = unicode(MATH_SYMBOL) | unicode(OTHER_SYMBOL) | choice("!#%&*+-/:<=>?@\\^|~")
   
-  val op = opChar+
-  val varid = lower ~++ idRest
-  val plainid = (op | varid | idStart ~++ idRest | varid | op) ^^ literal filter (!reserved.contains(_))
-  val quoteid = ('`' -~ (!'`' -~ printableChar +) ~- '`') ^^ literal
-  //val quoteid = ('`' -~ printableChar +~- '`') ^^ literal
+  val op = (opChar+) ^^ literal filter (!reservedOps.contains(_))
+  val varid = lower ~++ idRest ^^ literal filter (!keywords.contains(_))
+  val plainid = op | varid | ((letter - lower) ~++ idRest ^^ literal) - '_'
+  val quoteid = ('`' -~ (printableChar +~- '`')) ^^ literal
   val id = plainid | quoteid
 
-  lazy val idRest : Rule[List[Char]] = !idChar ^^^ Nil | ('_' ~++ op) ~- !idChar | idChar ~++ idRest
+  val keyword = letter ~++ idRest ^^ literal filter (keywords.contains(_))
+  val reservedOp = (opChar+) ^^ literal filter (reservedOps.contains(_))
+  
+  lazy val idRest : Rule[List[Char]] = ('_' ~++ (opChar+)) ~- !idChar | !idChar ^^^ Nil | idChar ~++ idRest
 
   val nonZero = decimalDigit filter (_ > 0)
   val hexNumeral = "0x" -~ hexDigit >> hexN
@@ -137,19 +139,18 @@ abstract class ScalaScanner extends Scanner {
   val stringLiteral = ('\"' -~ charElement *~- '\"' | "\"\"\"" -~ anyChar *~- "\"\"\"") ^^ literal
   val symbolLiteral = '\'' ~ plainid
   
-  
-  val semi = (";" | newline) ~- (newline*)
+  val space = (choice(" \t")*) ^^^ " "
+  val nl = (space ~ newline ~ space) ^^^ "{nl}"
+  val semi = space ~ (";" | nl) ~ (nl*) ~ space ^^^ ";"
    
-  val other = (item filter { ch => !(ch isWhitespace) } +) ^^ literal
-
   // note multi-line comments can nest
   lazy val multiLineComment : Rule[String] = ("/*" -~ (multiLineComment | anyChar) *~- "*/") ^^ literal
-  val lineComment : Rule[String] = "//" -~ (item - newline *) ^^ literal
-  val comment = lineComment | multiLineComment
+  val singleLineComment : Rule[String] = "//" -~ (item - newline *) ^^ literal
+  val comment = singleLineComment | multiLineComment
 }
 
 abstract class IncrementalScalaScanner extends ScalaScanner with IncrementalScanner {
-  val token = memo("token", (whitespace?) -~ (parentheses | stringLiteral | comment | id | delimiter| other))
+  val token = memo("token", space -~ (nl | semi | parentheses | integerLiteral | characterLiteral | symbolLiteral | stringLiteral | comment| keyword | reservedOp | id  | delimiter))
   val tokens = view(token) _
 
   val line = memo("line", newline ^^^ "" | (!newline -~ item +) ~- (newline?) ^^ literal)
@@ -203,8 +204,12 @@ object TestScalaScanner extends ScalaScanner with Application {
       "*" -> '*',
       "/" -> '/')
    
+      
   // check reserved words aren't ids
-  checkFailure(id)(reserved.toList : _*)
+  checkFailure(id)(keywords.keys.toList : _*)
+  checkFailure(id)(reservedOps.keys.toList : _*)
+  
+  //checkRule(keyword)(keywords.keys.toList.map[String] { s => (s, s) } : _*)
   
   checkRule(quoteid)("`yield`" -> "yield")
   
@@ -230,11 +235,6 @@ object TestScalaScanner extends ScalaScanner with Application {
 }
 
 object TestIncrementalScalaScanner extends IncrementalScalaScanner with Application {
-  
-  //println(octalEscape("\\060"))
-
-
-  // do some incremental parsing
   var input = new EditableInput[Char]
 
   def printTokens() {
