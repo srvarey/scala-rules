@@ -91,9 +91,7 @@ class RuleDamagerRepairer(
      * @see IPresentationRepairer#createPresentation(TextPresentation, ITypedRegion)
      */
     def createPresentation(presentation : TextPresentation, region : ITypedRegion) {
-      for (t <- scanner.tokens(input)) {
-        println(t)
-      }
+      println(scanner.tokens(input).mkString("\"", "\", \"", "\""))
     }
     
     /*{
