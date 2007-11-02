@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?eclipse version="3.2"?>
+<plugin>
+
+   <extension
+         point="org.eclipse.ui.editors">
+      <editor
+            name="Scala Editor"
+            extensions="scala"
+            icon="icons/sample.gif"
+            contributorClass="org.eclipse.ui.texteditor.BasicTextEditorActionContributor"
+            class="net.foggin.rules.plugin.ScalaEditor"
+            id="net.foggin.rules.editors.ScalaEditor">
+      </editor>
+   </extension>
+
+</plugin>
