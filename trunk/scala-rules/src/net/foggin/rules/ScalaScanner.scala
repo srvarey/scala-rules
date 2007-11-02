@@ -149,7 +149,7 @@ abstract class ScalaScanner extends Scanner {
   val comment = singleLineComment | multiLineComment
 }
 
-abstract class IncrementalScalaScanner extends ScalaScanner with IncrementalScanner {
+class IncrementalScalaScanner extends ScalaScanner with IncrementalScanner {
   val token = memo("token", space -~ (nl | semi | parentheses | integerLiteral | characterLiteral | symbolLiteral | stringLiteral | comment| keyword | reservedOp | id  | delimiter))
   val tokens = view(token) _
 
