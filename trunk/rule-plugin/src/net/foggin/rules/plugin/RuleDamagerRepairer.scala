@@ -67,7 +67,7 @@ class RuleDamagerRepairer(scanner : PluginScanner)
   // @see IDocumentListener
   def documentAboutToBeChanged(event : DocumentEvent) = {
       // We have to apply the change here because 'getDamageRegion' can be called more than once for each event :-(
-      input = input.edit(event.getOffset, event.getLength, event.getText)
+      input.edit(event.getOffset, event.getLength, event.getText)
   }
 
   // @see IDocumentListener
@@ -78,7 +78,8 @@ class RuleDamagerRepairer(scanner : PluginScanner)
     if (document ne this.document) {
       if (this.document ne null) this.document.removeDocumentListener(this)
       this.document = document;
-      input = new EditableInput[Char].edit(0, 0, document.get)
+      input = new EditableInput[Char]
+      input.edit(0, 0, document.get)
       document.addDocumentListener(this)
     }
   }
