@@ -149,13 +149,8 @@ abstract class ScalaScanner extends Scanner {
   val comment = singleLineComment | multiLineComment
 }
 
-class IncrementalScalaScanner extends ScalaScanner with IncrementalScanner {
-  val token = memo("token", space -~ (nl | semi | parentheses | integerLiteral | characterLiteral | symbolLiteral | stringLiteral | comment| keyword | reservedOp | id  | delimiter))
-  val tokens = view(token) _
 
-  val line = memo("line", newline ^^^ "" | (!newline -~ item +) ~- (newline?) ^^ literal)
-  val lines = view(line) _
-}
+
 
 object TestScalaScanner extends ScalaScanner with Application {
   type Context = ArrayInput[Char]
@@ -234,7 +229,13 @@ object TestScalaScanner extends ScalaScanner with Application {
   println("Scanner tests passed")
 }
 
-object TestIncrementalScalaScanner extends IncrementalScalaScanner with Application {
+object TestIncrementalScalaScanner extends ScalaScanner with IncrementalScanner with Application {
+  val token = memo("token", space -~ (nl | semi | parentheses | integerLiteral | characterLiteral | symbolLiteral | stringLiteral | comment| keyword | reservedOp | id  | delimiter))
+  val tokens = view(token) _
+
+  val line = memo("line", newline ^^^ "" | (!newline -~ item +) ~- (newline?) ^^ literal)
+  val lines = view(line) _
+
   var input = new EditableInput[Char]
 
   def printTokens() {
