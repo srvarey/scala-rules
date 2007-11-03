@@ -92,7 +92,7 @@ abstract class ScalaScanner extends Scanner {
   val delimiter = choice("`'\".;,")
   val separator = parentheses | delimiter | whitespace
   
-  val letter = choice("$_") | anyChar filter isLetter
+  val letter = choice("$_") | (anyChar filter isLetter)
   val digit = anyChar filter isDigit
   val lower = anyChar filter isLowerCase
   val idChar = letter | digit
@@ -206,6 +206,10 @@ object TestScalaScanner extends ScalaScanner with Application {
   
   //checkRule(keyword)(keywords.keys.toList.map[String] { s => (s, s) } : _*)
   
+  checkRule(keyword)(
+      "abstract" -> "abstract",
+      "_" -> "_")
+  
   checkRule(quoteid)("`yield`" -> "yield")
   
   checkRule(id)(
@@ -249,7 +253,7 @@ object TestIncrementalScalaScanner extends ScalaScanner with IncrementalScanner 
   }
 
   // set up initial text
-  input = input.edit(0, 0, """
+  input.edit(0, 0, """
     package a.b.c
     
     /** my comment */
@@ -262,7 +266,7 @@ object TestIncrementalScalaScanner extends ScalaScanner with IncrementalScanner 
   printLines()
 
  // insert something
- input = input.edit(19, 0, """
+ input.edit(19, 0, """
    class Dummy {
      val answer = 42
    }
