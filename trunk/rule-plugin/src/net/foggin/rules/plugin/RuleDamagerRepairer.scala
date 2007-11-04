@@ -39,15 +39,15 @@ class PluginScanner extends ScalaScanner with IncrementalScanner {
   val COMMENT = new TextAttribute(colour(new RGB(128, 128, 255)), null, SWT.ITALIC)
   
   def style(rule : Rule[Any], attribute : TextAttribute) = {
-    for (_ <- space; start <- context; _ <- rule; end <- context) yield StyleToken(start.index, end.index, attribute)
+    for (_ <- whitespace; start <- context; _ <- rule; end <- context) yield StyleToken(start.index, end.index, attribute)
   }
   
   val commentToken = style(comment, COMMENT)
-  val literalToken = style(integerLiteral | characterLiteral | symbolLiteral | stringLiteral, LITERAL)
+  val literalToken = style(literal, LITERAL)
   val keywordToken = style(keyword, KEYWORD)
-  val otherToken = style(nl | semi | parentheses | reservedOp | id  | '.' | ',', DEFAULT)
+  val otherToken = style(semi | separator |  reservedOp | id, DEFAULT)
   
-  val token = memo("token", commentToken | literalToken | keywordToken | otherToken)
+  val token = memo("token", commentToken | keywordToken | literalToken | otherToken)
   val tokens = view(token) _
 
   def reconciler(sourceViewer : ISourceViewer) = new PresentationReconciler() {
