@@ -2,6 +2,10 @@ package net.foggin.rules
 
 import Character._
 
+/** Defines the Scala lexical syntax rules.
+ *
+ * Note: Embedded XML not yet implemented.
+ */
 abstract class ScalaScanner extends Scanner {
 
   // reserved keywords and operators
@@ -98,14 +102,14 @@ abstract class ScalaScanner extends Scanner {
   val idChar = letter | digit
   val opChar = unicode(MATH_SYMBOL) | unicode(OTHER_SYMBOL) | choice("!#%&*+-/:<=>?@\\^|~")
   
-  val op = (opChar+) ^^ literal filter (!reservedOps.contains(_))
-  val varid = lower ~++ idRest ^^ literal filter (!keywords.contains(_))
-  val plainid = op | varid | ((letter - lower) ~++ idRest ^^ literal) - '_'
-  val quoteid = ('`' -~ (printableChar +~- '`')) ^^ literal
+  val op = (opChar+) ^^ toString filter (!reservedOps.contains(_))
+  val varid = lower ~++ idRest ^^ toString filter (!keywords.contains(_))
+  val plainid = op | varid | ((letter - lower) ~++ idRest ^^ toString) - '_'
+  val quoteid = ('`' -~ (printableChar +~- '`')) ^^ toString
   val id = plainid | quoteid
 
-  val keyword = letter ~++ idRest ^^ literal filter (keywords.contains(_))
-  val reservedOp = (opChar+) ^^ literal filter (reservedOps.contains(_))
+  val keyword = letter ~++ idRest ^^ toString filter (keywords.contains(_))
+  val reservedOp = (opChar+) ^^ toString filter (reservedOps.contains(_))
   
   lazy val idRest : Rule[List[Char]] = ('_' ~++ (opChar+)) ~- !idChar | !idChar ^^^ Nil | idChar ~++ idRest
 
@@ -116,7 +120,7 @@ abstract class ScalaScanner extends Scanner {
   val integerLiteral = (hexNumeral | octalNumeral | decimalNumeral) ~- (choice("Ll")?) ~- !idChar
   
   val intPart = decimalNumeral ^^ (_ toString) | ""
-  val floatPart = ('.' ~++ (range('0', '9')*) ^^ literal) | ""
+  val floatPart = ('.' ~++ (range('0', '9')*) ^^ toString) | ""
   val exponentPart = (for (e <- choice("eE"); s <- "+" | "-" | ""; n <- intPart) yield e + s + n) | ""
 
   val floatLiteral = for {
@@ -136,7 +140,7 @@ abstract class ScalaScanner extends Scanner {
 
   val charElement = charEscapeSeq | printableChar
   val characterLiteral = '\'' -~ (charElement - '\'') ~- '\''
-  val stringLiteral = ('\"' -~ charElement *~- '\"' | "\"\"\"" -~ anyChar *~- "\"\"\"") ^^ literal
+  val stringLiteral = ('\"' -~ charElement *~- '\"' | "\"\"\"" -~ anyChar *~- "\"\"\"") ^^ toString
   val symbolLiteral = '\'' ~ plainid
   
   val space = (choice(" \t")*) ^^^ " "
@@ -144,8 +148,8 @@ abstract class ScalaScanner extends Scanner {
   val semi = space ~ (";" | nl) ~ (nl*) ~ space ^^^ ";"
    
   // note multi-line comments can nest
-  lazy val multiLineComment : Rule[String] = ("/*" -~ (multiLineComment | anyChar) *~- "*/") ^^ literal
-  val singleLineComment : Rule[String] = "//" -~ (item - newline *) ^^ literal
+  lazy val multiLineComment : Rule[String] = ("/*" -~ (multiLineComment | anyChar) *~- "*/") ^^ toString
+  val singleLineComment : Rule[String] = "//" -~ (item - newline *) ^^ toString
   val comment = singleLineComment | multiLineComment
 }
 
@@ -237,7 +241,7 @@ object TestIncrementalScalaScanner extends ScalaScanner with IncrementalScanner 
   val token = memo("token", space -~ (nl | semi | parentheses | integerLiteral | characterLiteral | symbolLiteral | stringLiteral | comment| keyword | reservedOp | id  | delimiter))
   val tokens = view(token) _
 
-  val line = memo("line", newline ^^^ "" | (!newline -~ item +) ~- (newline?) ^^ literal)
+  val line = memo("line", newline ^^^ "" | (!newline -~ item +) ~- (newline?) ^^ toString)
   val lines = view(line) _
 
   var input = new EditableInput[Char]
