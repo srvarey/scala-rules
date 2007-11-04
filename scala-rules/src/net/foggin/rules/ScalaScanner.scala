@@ -7,13 +7,17 @@ import Character._
  * Note: Embedded XML not yet implemented.
  */
 abstract class ScalaScanner extends Scanner {
+  
+  def ignoreable = choice(" \t\r\n\f") | comment
+  
+  def token[T](rule : Rule[T]) = (ignoreable*) -~ rule
 
   // reserved keywords and operators
   val keywords = scala.collection.mutable.Map.empty[String, Rule[String]]
   val reservedOps = scala.collection.mutable.Map.empty[String, Rule[String]]
       
-  private def keyword(name : String) = keywords.getOrElseUpdate(name, name ~- !idChar)
-  private def reservedOp(name : String) = reservedOps.getOrElseUpdate(name, name ~- !opChar)
+  private def keyword(name : String) = keywords.getOrElseUpdate(name, token(name ~- !idChar))
+  private def reservedOp(name : String) = reservedOps.getOrElseUpdate(name, token(name ~- !opChar))
   
   val `abstract` = keyword("abstract")
   val `case` = keyword("case")
@@ -67,6 +71,18 @@ abstract class ScalaScanner extends Scanner {
   val `#` = reservedOp("#")
   val `@` = reservedOp("@")
   
+  //These fail when used in Eclipse plugin
+  //val `,` = token(',') 
+  //val `.` = token('.')
+  //val `(` = token('(')
+  //val `)` = token(')')
+  //val `[` = token('[')
+  //val `]` = token(']')
+  //val `{` = token('{')
+  //val `}` = token('}')
+  
+  val comma = token(',')
+  val separator = token(choice(",.()[]{}"))
   
   val decimalDigit = range('0', '9') ^^ (_ - 48L)
   def decimal(n : Long) = decimalDigit ^^ (n * 10 + _)
@@ -92,9 +108,8 @@ abstract class ScalaScanner extends Scanner {
   
   def unicode(category : Int) = anyChar filter (getType(_) == category)
   
-  val parentheses = choice("()[]{}")
-  val delimiter = choice("`'\".;,")
-  val separator = parentheses | delimiter | whitespace
+  //val delimiter = choice("`'\".;,")
+  //val separator = parentheses | delimiter | whitespace
   
   val letter = choice("$_") | (anyChar filter isLetter)
   val digit = anyChar filter isDigit
@@ -102,15 +117,15 @@ abstract class ScalaScanner extends Scanner {
   val idChar = letter | digit
   val opChar = unicode(MATH_SYMBOL) | unicode(OTHER_SYMBOL) | choice("!#%&*+-/:<=>?@\\^|~")
   
-  val op = (opChar+) ^^ toString filter (!reservedOps.contains(_))
-  val varid = lower ~++ idRest ^^ toString filter (!keywords.contains(_))
-  val plainid = op | varid | ((letter - lower) ~++ idRest ^^ toString) - '_'
-  val quoteid = ('`' -~ (printableChar +~- '`')) ^^ toString
+  val keyword = select(keywords.values.toList)
+  val reservedOp = select(reservedOps.values.toList)
+  
+  val op = token((opChar+) ^^ toString filter (!reservedOps.contains(_)))
+  val varid = token(lower ~++ idRest ^^ toString filter (!keywords.contains(_)))
+  val plainid = op | token(letter ~++ idRest ^^ toString filter (!keywords.contains(_)))
+  val quoteid = token('`' -~ (printableChar +~- '`')) ^^ toString
   val id = plainid | quoteid
 
-  val keyword = letter ~++ idRest ^^ toString filter (keywords.contains(_))
-  val reservedOp = (opChar+) ^^ toString filter (reservedOps.contains(_))
-  
   lazy val idRest : Rule[List[Char]] = ('_' ~++ (opChar+)) ~- !idChar | !idChar ^^^ Nil | idChar ~++ idRest
 
   val nonZero = decimalDigit filter (_ > 0)
@@ -151,6 +166,17 @@ abstract class ScalaScanner extends Scanner {
   lazy val multiLineComment : Rule[String] = ("/*" -~ (multiLineComment | anyChar) *~- "*/") ^^ toString
   val singleLineComment : Rule[String] = "//" -~ (item - newline *) ^^ toString
   val comment = singleLineComment | multiLineComment
+  
+  /** Literal ::= integerLiteral
+   *    | floatingPointLiteral
+   *    | booleanLiteral
+   *    | characterLiteral
+   *    | stringLiteral
+   *    | symbolLiteral
+   *    | null */
+  val literal = token(integerLiteral | floatLiteral | doubleLiteral | booleanLiteral | characterLiteral | stringLiteral | symbolLiteral | `null`) ^^ (Literal(_))
+  
+
 }
 
 
@@ -238,8 +264,8 @@ object TestScalaScanner extends ScalaScanner with Application {
 }
 
 object TestIncrementalScalaScanner extends ScalaScanner with IncrementalScanner with Application {
-  val token = memo("token", space -~ (nl | semi | parentheses | integerLiteral | characterLiteral | symbolLiteral | stringLiteral | comment| keyword | reservedOp | id  | delimiter))
-  val tokens = view(token) _
+  //val token = memo("token", space -~ (nl | semi | parentheses | integerLiteral | characterLiteral | symbolLiteral | stringLiteral | comment| keyword | reservedOp | id  | delimiter))
+  val tokens = view(memo("token", nl | semi | token(comment) | separator |  literal | keyword | reservedOp | id)) _
 
   val line = memo("line", newline ^^^ "" | (!newline -~ item +) ~- (newline?) ^^ toString)
   val lines = view(line) _
@@ -248,7 +274,7 @@ object TestIncrementalScalaScanner extends ScalaScanner with IncrementalScanner 
 
   def printTokens() {
     println; println("Tokens: ")
-    println(tokens(input).mkString("\"", "\", \"", "\""))
+    println(tokens(input).mkString(", "))
   }
 
   def printLines() {
