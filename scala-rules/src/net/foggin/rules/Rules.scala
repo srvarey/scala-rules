@@ -17,6 +17,8 @@ trait Rules {
   type Result[+A] = rules.Result[A, Context]
   type Rule[+A] = rules.Rule[Context, A]
   
+  val failure : Rule[Nothing] = Rule { ctx => Failure[Context] }
+  
   /** Converts a function into a rule. */
   implicit def createRule[A](f : Context => Result[A]) = Rule(f)
 	  

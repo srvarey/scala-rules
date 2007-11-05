@@ -2,6 +2,18 @@ package net.foggin.rules;
 
 case class Literal[T](value : T)
 
+abstract class PathElement
+case object ThisElement extends PathElement
+case class SuperElement(classQualifier : Option[String]) extends PathElement
+case class IdElement(id : String) extends PathElement
+
+case class Path(elements : Seq[PathElement]) {
+  def isStable = elements.last match {
+    case IdElement(_) => true
+    case _ => false
+  }
+}
+
 /** Rules based on Scala Language Specification 2.6.0 
  * (copied from Syntax Summary section)
  *
@@ -20,26 +32,33 @@ abstract class ScalaParser extends ScalaScanner {
   /** ids ::= id {‘,’ id} */
   val ids = id ~+~ comma
   
-  /** Path ::= StableId
-   *    | [id ‘.’] this */
-  lazy val path : Rule[Any] = stableId | (id ~- dot ?) ~ `this`
+  /** Note left-recursive definition.
+  *
+  * Path ::= StableId 
+  *    | [id ‘.’] this 
+  *
+  * StableId ::= id
+  *    | Path ‘.’ id
+  *    | [id ’.’] super [ClassQualifier] ‘.’ id
+  *
+  * ClassQualifier ::= ‘[’ id ‘]’
+  */
+  val pathElement = (id ^^ IdElement
+      | `super` -~ (square(id) ?) ^^ SuperElement
+      | `this` ^^^ ThisElement)
     
-  /** StableId ::= id
-   *    | Path ‘.’ id
-   *    | [id ’.’] super [ClassQualifier] ‘.’ id */
-  lazy val stableId : Rule[Any] = id | path ~- dot ~ id | (id ~- dot ?) ~ `super` ~ (classQualifier ?) ~- dot ~ id
+  val path = pathElement ~+~ dot ^^ Path
+    
+  /** StableId is a Path ending in an id */
+  val stableId = path filter (_ isStable)
   
-  /** ClassQualifier ::= ‘[’ id ‘]’ */
-  val classQualifier = square(id)
-    
-    
   /** Type ::= InfixType ‘=>’ Type
-   *    | ‘(’ [‘=>’ Type] ‘)’ ‘=>’ Type
+   *    | ‘(’ [‘=>’ Type] ‘)’ ‘=>’ Type     // don't think this is right - should be multiple parameter types with optional lazy?
    *    | InfixType [ExistentialClause] */
-  lazy val typeSpec : Rule[Any] = 
-      infixType ~ `=>` ~ typeSpec |
-        round(`=>` ~ typeSpec ?) ~ `=>` ~ typeSpec | // don't think this is right - should be multiple parameter types with optional lazy?
-      infixType ~ existentialClause
+  lazy val typeSpec : Rule[Any] = (
+      infixType ~ `=>` ~ typeSpec
+      | round(`=>` ~ typeSpec ?) ~ `=>` ~ typeSpec 
+      | infixType ~ (existentialClause?))
     
   /** ExistentialClause ::= forSome ‘{’ ExistentialDcl {semi ExistentialDcl}} ‘}’ */
     // note typo above (double }})
@@ -163,7 +182,7 @@ SimpleExpr1 ::= Literal
       | xmlExpr)
       
   // NB XmlExpr is not in the syntax summary of SLS 2.6.0
-  def xmlExpr : Rule[Any]
+  val xmlExpr = failure
 
   /** Exprs ::= Expr {‘,’ Expr} */
   lazy val exprs = expr ~+~ comma
@@ -253,7 +272,7 @@ Expr [Guard] */
       | xmlPattern)
 
   // NB XmlPattern is not in the syntax summary of SLS 2.6.0
-  def xmlPattern : Rule[Any]
+  val xmlPattern = failure
 
   /** Patterns ::= Pattern [‘,’ Patterns]
 | ‘_’ * */
@@ -502,6 +521,6 @@ ClassParamClauses [requires AnnotType] ClassTemplateOpt */
   lazy val packaging = `package` ~ qualId ~ (nl?) ~ curly(topStatSeq)
 
   /** CompilationUnit ::= [package QualId semi] TopStatSeq */
-  def compilationUnit = (`package` ~ qualId ~ semi ?) ~ topStatSeq
+  lazy val compilationUnit = (`package` ~ qualId ~ semi ?) ~ topStatSeq
 
 }
