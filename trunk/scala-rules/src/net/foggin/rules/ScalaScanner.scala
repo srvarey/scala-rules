@@ -8,9 +8,7 @@ import Character._
  */
 abstract class ScalaScanner extends Scanner {
   
-  def ignoreable = choice(" \t\r\n\f") | comment
-  
-  def token[T](rule : Rule[T]) = (ignoreable*) -~ rule
+  def token[T](rule : Rule[T]) = (space | comment *) -~ rule
 
   // reserved keywords and operators
   val keywords = scala.collection.mutable.Map.empty[String, Rule[String]]
