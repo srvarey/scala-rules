@@ -73,6 +73,9 @@ class Rule[S, +A](f : S => Result[A, S]) extends (S => Result[A, S])
     val rhs = for (f <- join; a <- this) yield f(_ : B, a)
     for (a <- this; fs <- rhs*) yield fs.foldLeft[B](a) { (b, f) => f(b) }
   }
+  
+  /** Repeats this rule one or more times with a separator (which is discarded) */
+  def ~+~(sep : Rule[S, Any]) = this ~++ (sep -~ this *)
 
   /** Creates a rule that suceeds only if this rule would fail on the given context. */
   def unary_! = for (s <- Rule.get[S] if !apply(s).isSuccess) yield s
