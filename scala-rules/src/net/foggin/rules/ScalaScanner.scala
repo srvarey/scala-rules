@@ -17,7 +17,8 @@ abstract class ScalaScanner extends Scanner {
   val reservedOps = scala.collection.mutable.Map.empty[String, Rule[String]]
       
   private def keyword(name : String) = keywords.getOrElseUpdate(name, token(name ~- !idChar))
-  private def reservedOp(name : String) = reservedOps.getOrElseUpdate(name, token(name ~- !opChar))
+  private def reservedOp(name : String) = reservedOps.getOrElseUpdate(name, opToken(name))
+  private def opToken(op : String) = token(op ~- !opChar)
   
   val `abstract` = keyword("abstract")
   val `case` = keyword("case")
@@ -71,7 +72,22 @@ abstract class ScalaScanner extends Scanner {
   val `#` = reservedOp("#")
   val `@` = reservedOp("@")
   
-  //These fail when used in Eclipse plugin
+  // not reserved, but have special uses:
+  val minus = opToken("-")  // variance or unary op
+  val plus = opToken("+") // variance or unary op
+  val bang = opToken("!") // unary op
+  val tilde = opToken("~") // unary op
+  val `*` = opToken("*") // repeated params
+  val `|` = opToken("|") // combining patterns
+  
+  //These can be defined but cause compile errors when used later
+  //val `+` = opToken("+")
+  //val `-` = opToken("-")
+  //val `!` = opToken("!") // unary op
+  //val `~` = opToken("~")
+
+  
+  //These can be defined but cause runtime errors when used in plugin
   //val `,` = token(',') 
   //val `.` = token('.')
   //val `(` = token('(')
@@ -82,6 +98,7 @@ abstract class ScalaScanner extends Scanner {
   //val `}` = token('}')
   
   val comma = token(',')
+  val dot = token('.')
   val separator = token(choice(",.()[]{}"))
   
   val decimalDigit = range('0', '9') ^^ (_ - 48L)
