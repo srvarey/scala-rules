@@ -8,7 +8,7 @@ import Character._
  */
 abstract class ScalaScanner extends Scanner {
   
-  def token[T](rule : Rule[T]) = (space | comment *) -~ rule
+  def token[T](rule : Rule[T]) = (choice(" \t") | comment *) -~ rule
 
   // reserved keywords and operators
   val keywords = scala.collection.mutable.Map.empty[String, Rule[String]]
@@ -180,7 +180,7 @@ abstract class ScalaScanner extends Scanner {
   // note multi-line comments can nest
   lazy val multiLineComment : Rule[String] = ("/*" -~ (multiLineComment | anyChar) *~- "*/") ^^ toString
   val singleLineComment : Rule[String] = "//" -~ (item - newline *) ^^ toString
-  val comment = singleLineComment | multiLineComment
+  lazy val comment = singleLineComment | multiLineComment
   
   /** Literal ::= integerLiteral
    *    | floatingPointLiteral
