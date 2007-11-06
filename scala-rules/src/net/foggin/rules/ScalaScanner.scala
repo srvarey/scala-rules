@@ -279,13 +279,15 @@ object TestScalaScanner extends ScalaScanner with Application {
 }
 
 object TestIncrementalScalaScanner extends ScalaScanner with IncrementalScanner with Application {
-  //val token = memo("token", space -~ (nl | semi | parentheses | integerLiteral | characterLiteral | symbolLiteral | stringLiteral | comment| keyword | reservedOp | id  | delimiter))
-  val tokens = view(memo("token", nl | semi | token(comment) | separator |  literal | keyword | reservedOp | id)) _
+  val document = new EditableDocument[Char]
+  val input = document.first
+
+  val tokens = view(memo("token", nl | semi | space ~- comment | separator |  literal | keyword | reservedOp | id)) _
 
   val line = memo("line", newline ^^^ "" | (!newline -~ item +) ~- (newline?) ^^ toString)
   val lines = view(line) _
 
-  var input = new EditableInput[Char]
+  //var input = new EditableInput[Char]
 
   def printTokens() {
     println; println("Tokens: ")
@@ -298,7 +300,7 @@ object TestIncrementalScalaScanner extends ScalaScanner with IncrementalScanner 
   }
 
   // set up initial text
-  input.edit(0, 0, """
+  document.edit(0, 0, """
     package a.b.c
     
     /** my comment */
@@ -311,7 +313,7 @@ object TestIncrementalScalaScanner extends ScalaScanner with IncrementalScanner 
   printLines()
 
  // insert something
- input.edit(19, 0, """
+ document.edit(19, 0, """
    class Dummy {
      val answer = 42
    }
