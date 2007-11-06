@@ -195,9 +195,7 @@ abstract class ScalaScanner extends Scanner {
 }
 
 
-
-
-object TestScalaScanner extends ScalaScanner with Application {
+trait TestScanner extends Scanner with Application {
   type Context = ArrayInput[Char]
   
   def check[A](input : String, actual : Result[A], expected : Result[A]) {
@@ -222,6 +220,9 @@ object TestScalaScanner extends ScalaScanner with Application {
   
   implicit def tripleToSuccess[A](triple : ((String, A), String)) : (String, Result[A]) = 
     triple match { case ((input, a), rest) => input -> Success(a, rest) }
+}
+
+object TestScalaScanner extends ScalaScanner with TestScanner {
   
   checkRule(unicodeEscape)("\\u0030" -> '0', "\\u21D2" -> '\u21D2')
   checkRule(octalEscape)("\\061" -> '1')

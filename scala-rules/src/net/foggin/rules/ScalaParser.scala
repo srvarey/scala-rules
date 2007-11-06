@@ -14,6 +14,13 @@ case class Path(elements : Seq[PathElement]) {
   }
 }
 
+abstract class SimpleType
+case class SingletonType(path : Path) extends SimpleType
+case class TypeDesignator(path : Path) extends SimpleType
+case class TupleType(types : Seq[SimpleType]) extends SimpleType
+case class TypeProjection(simpleType : SimpleType, id : String) extends SimpleType
+case class ParameterizedType(simpleType : SimpleType, typeArgs : Seq[SimpleType]) extends SimpleType
+
 /** Rules based on Scala Language Specification 2.6.0 
  * (copied from Syntax Summary section)
  *
@@ -82,19 +89,32 @@ abstract class ScalaParser extends ScalaScanner {
   /** AnnotType ::= {Annotation} SimpleType */
   lazy val annotType = (annotation *) ~ simpleType
 
-  // left-recursive definition
   /** SimpleType ::= SimpleType TypeArgs
-| SimpleType ‘#’ id
-| StableId
-| Path ‘.’ type
-| ‘(’ Types [‘,’] ’)’ */
-  lazy val simpleType = (stableId | path ~ dot ~ `type` | round(types ~ (comma?))) ~ (typeArgs | `#` ~ id *)
+   *    | SimpleType ‘#’ id
+   *    | StableId
+   *    | Path ‘.’ type
+   *    | ‘(’ Types [‘,’] ’)’ 
+   *
+   * Note left-recursive definition above.
+   */
+  val simpleType = (
+      path ~- dot ~- `type` ^^ SingletonType
+      | stableId ^^ TypeDesignator
+      | round(types ~- (comma?)) ^^ TupleType) >> typeArgsOrProjection
 
+  def typeArgsOrProjection(simpleType : SimpleType) : Rule[SimpleType] = (
+      parameterizedType(simpleType) >> typeArgsOrProjection
+      | projection(simpleType) >> typeArgsOrProjection
+      | success(simpleType))
+      
+  def parameterizedType(simpleType : SimpleType) = square(types) ^^ (ParameterizedType(simpleType, _))
+  def projection(simpleType : SimpleType) = `#` -~ id ^^ (TypeProjection(simpleType, _))
+      
   /** TypeArgs ::= ‘[’ Types ‘]’ */
   lazy val typeArgs = square(types)
 
   /** Types ::= Type {‘,’ Type} */
-  lazy val types = typeSpec ~+~ comma
+  lazy val types : Rule[List[SimpleType]] = simpleType ~+~ comma //typeSpec ~+~ comma
 
   /** Refinement ::= [nl] ‘{’ RefineStat {semi RefineStat} ‘}’ */
   lazy val refinement = (nl?) -~ curly(refineStat ~+~ semi) 
@@ -523,4 +543,31 @@ ClassParamClauses [requires AnnotType] ClassTemplateOpt */
   /** CompilationUnit ::= [package QualId semi] TopStatSeq */
   lazy val compilationUnit = (`package` ~ qualId ~ semi ?) ~ topStatSeq
 
+}
+  
+package test {
+  object TestScalaParser extends ScalaParser with TestScanner {
+    checkRule(path)(
+        "A.bc.this" -> Path(IdElement("A") :: IdElement("bc") :: ThisElement :: Nil), 
+        "super[Def].gh" -> Path(SuperElement(Some("Def")) :: IdElement("gh") :: Nil))
+        
+    checkRule(stableId)(
+        "super[Def].gh" -> Path(SuperElement(Some("Def")) :: IdElement("gh") :: Nil))
+        
+    checkFailure(stableId)("A.bc.this")
+    
+    checkRule(simpleType)(
+        "A" -> TypeDesignator(Path(IdElement("A") :: Nil)),
+        "A.B" -> TypeDesignator(Path(IdElement("A") :: IdElement("B") :: Nil)),
+        "A.type" -> SingletonType(Path(IdElement("A") :: Nil)),
+        "(A, B)" -> TupleType(TypeDesignator(Path(IdElement("A") :: Nil)):: TypeDesignator(Path(IdElement("B") :: Nil)) :: Nil),
+        "(A, )" -> TupleType(TypeDesignator(Path(IdElement("A") :: Nil)) :: Nil),
+        "A#B[C, D]" -> ParameterizedType(
+            TypeProjection(TypeDesignator(Path(IdElement("A") :: Nil)), "B"), 
+            TypeDesignator(Path(IdElement("C") :: Nil)) :: TypeDesignator(Path(IdElement("D") :: Nil)) :: Nil)
+        )
+        
+        
+    println("ScalaParser tests passed")
+  }
 }
