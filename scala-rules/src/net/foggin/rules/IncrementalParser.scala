@@ -10,9 +10,12 @@ trait MemoisableRules extends Rules {
   def memo[A](key : AnyRef, f : Context => Result[A]) : Rule[A] = createRule[A] { ctx => ctx.memo(key, f) }
 }
 
-class EditableInput[A] extends Input[A, EditableInput[A]] with Memoisable[EditableInput[A]] {
+class EditableInput[A](var next : Result[A, EditableInput[A]]) 
+    extends Input[A, EditableInput[A]] with Memoisable[EditableInput[A]] {
+  
+  def this() = this(Failure[EditableInput[A]])
   var index : Int = 0
-  var next : Result[A, EditableInput[A]] = Failure[EditableInput[A]]
+  //var next : Result[A, EditableInput[A]] = Failure[EditableInput[A]]
   
   private val map = new scala.collection.mutable.HashMap[AnyRef, Result[Any, EditableInput[A]]]
   
@@ -37,33 +40,30 @@ class EditableInput[A] extends Input[A, EditableInput[A]] with Memoisable[Editab
    * @param inserted values to insert
    */
   def edit(pos : Int, delete: Int, insert : Seq[A]) {
+    // can do this instead from Scala 2.6.1. on
+    //edit(0, pos, delete, insert.elements)
+
     var values = insert.elements
     
     var current = this
     while (current ne null) {
       
-      if (current.index <= pos) {
-        // delete all Failure results and all Success results
-        // that point beyond pos
-        current.map.retain { 
-          case (_, Success(_, elem)) if elem.index < pos => true 
-          case _ => false 
-        }
+      // delete all Failure results up to pos
+      // and all Success results up to pos that point beyond pos
+      if (current.index <= pos) current.map.retain { 
+        case (_, Success(_, elem)) if elem.index < pos => true 
+        case _ => false 
       }
       
-      if (current.index == pos) {
-        // delete elements
-        for (_ <- 1 to delete) current.next match {
-            case Success(_, element) => current.next = element.next
-            case _ => 
-        }
+      // delete elements
+      if (current.index == pos) for (_ <- 1 to delete) current.next match {
+        case Success(_, element) => current.next = element.next
+        case _ => 
       }
         
+      // insert element
       if (current.index >= pos && values.hasNext) {
-        // insert element
-        val newElement = new EditableInput[A]
-        newElement.next = current.next
-        current.next = Success(values.next(), newElement)
+        current.next = Success(values.next(), new EditableInput(current.next))
       }
         
       current.next match {
@@ -73,6 +73,37 @@ class EditableInput[A] extends Input[A, EditableInput[A]] with Memoisable[Editab
         case _ => 
           current = null
       }
+    }
+  }
+  
+
+  /** Tail-recursive function.  Will only work from Scala 2.6.1. */
+  private def edit(index: Int, pos : Int, delete: Int, values : Iterator[A]) {
+    // update index
+    this.index = index
+    
+    // delete all Failure results up to pos
+    // and all Success results up to pos that point beyond pos
+    if (index <= pos) map.retain { 
+      case (_, Success(_, elem)) if elem.index < pos => true 
+      case _ => false 
+    }
+    
+    // delete elements
+    if (index == pos) for (_ <- 1 to delete) next match {
+      case Success(_, element) => next = element.next
+      case _ => 
+    }
+      
+    // insert element
+    if (index >= pos && values.hasNext) {
+      next = Success(values.next(), new EditableInput(next))
+    }
+      
+    // tail-recursive call to next element
+    next match {
+      case Success(_, element) => element.edit(index + 1, pos, delete, values)
+      case _ => ()
     }
   }
 }
