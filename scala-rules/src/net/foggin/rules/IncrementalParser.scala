@@ -16,12 +16,16 @@ class EditableDocument[A] {
   val first = new Element(Failure[Element])
   
   class Element(var next : Result[A, Element]) 
-      extends Input[A, Element] with Memoisable[Element] {
+      extends Input[A, Element] 
+      with Memoisable[Element] 
+      with Ordered[Element] {
 
     var index : Int = 0
 
     private val map = new scala.collection.mutable.HashMap[AnyRef, Result[Any, Element]]
 
+    def compare(other : Element) = index - other.index
+    
     def memo[B](key : AnyRef, f : Element => Result[B, Element]) : Result[B, Element] = {
       map.getOrElseUpdate(key, {
         val result = f(this)
