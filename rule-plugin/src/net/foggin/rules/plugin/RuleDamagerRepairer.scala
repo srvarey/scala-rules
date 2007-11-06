@@ -62,7 +62,7 @@ class RuleDamagerRepairer(scanner : PluginScanner)
     extends IPresentationDamager with IPresentationRepairer with IDocumentListener {
 
   private var document : IDocument = null
-  private var input : EditableInput[Char] = null
+  private var input : EditableDocument[Char] = null
 
   // @see IDocumentListener
   def documentAboutToBeChanged(event : DocumentEvent) = {
@@ -78,7 +78,7 @@ class RuleDamagerRepairer(scanner : PluginScanner)
     if (document ne this.document) {
       if (this.document ne null) this.document.removeDocumentListener(this)
       this.document = document;
-      input = new EditableInput[Char]
+      input = new EditableDocument[Char]
       input.edit(0, 0, document.get)
       document.addDocumentListener(this)
     }
@@ -92,6 +92,6 @@ class RuleDamagerRepairer(scanner : PluginScanner)
         
   // @see IPresentationRepairer
   def createPresentation(presentation : TextPresentation, region : ITypedRegion) {
-    for (t <- scanner.tokens(input)) t.addToPresentation(presentation)
+    for (t <- scanner.tokens(input.first)) t.addToPresentation(presentation)
   }
 }
