@@ -10,62 +10,81 @@ trait MemoisableRules extends Rules {
   def memo[A](key : AnyRef, f : Context => Result[A]) : Rule[A] = createRule[A] { ctx => ctx.memo(key, f) }
 }
 
-class EditableInput[A](var next : Result[A, EditableInput[A]]) 
-    extends Input[A, EditableInput[A]] with Memoisable[EditableInput[A]] {
+class EditableDocument[A] {
   
-  def this() = this(Failure[EditableInput[A]])
-  var index : Int = 0
-  //var next : Result[A, EditableInput[A]] = Failure[EditableInput[A]]
+  var debug = false
+  val first = new Element(Failure[Element])
   
-  private val map = new scala.collection.mutable.HashMap[AnyRef, Result[Any, EditableInput[A]]]
-  
-  def memo[B](key : AnyRef, f : EditableInput[A] => Result[B, EditableInput[A]]) : Result[B, EditableInput[A]] = {
-    map.getOrElseUpdate(key, {
-      val result = f(this)
-      
-      // only for debugging purposes
-      result match {
-        case Success(value, element) => println(key + " -> " + value)
-        case _ =>
-      }
-      result
-    }).asInstanceOf[Result[B, EditableInput[A]]]
+  class Element(var next : Result[A, Element]) 
+      extends Input[A, Element] with Memoisable[Element] {
+
+    var index : Int = 0
+
+    private val map = new scala.collection.mutable.HashMap[AnyRef, Result[Any, Element]]
+
+    def memo[B](key : AnyRef, f : Element => Result[B, Element]) : Result[B, Element] = {
+      map.getOrElseUpdate(key, {
+        val result = f(this)
+        if(debug) result match {
+          case Success(value, element) => println(key + " -> " + value)
+          case _ =>
+        }
+        result
+      }).asInstanceOf[Result[B, Element]]
+    }
+
+    /** Tail-recursive function.  Will only work from Scala 2.6.1. */
+    private def edit(index: Int, pos : Int, deleted: Int, values : Iterator[A]) {
+      this.index = index
+      if (index <= pos) cleanResults(pos)
+      if (index == pos) delete(deleted)
+      if (index >= pos && values.hasNext) insert(values.next)
+    
+      // recursive call to next element
+      next match {
+       case Success(_, element) => element.edit(index + 1, pos, deleted, values)
+       case _ => ()
+     }
+   }
+    
+    /** Delete all Failure results up to pos
+     *  and all Success results up to pos that point beyond pos
+     */
+    def cleanResults(pos : Int) = map.retain { 
+      case (_, Success(_, elem)) if elem.index < pos => true 
+      case _ => false 
+    }
+    
+    /** Delete elements */
+    def delete(count : Int) = for (_ <- 1 to count) next match {
+      case Success(_, element) => next = element.next
+      case _ => ()
+    }
+    
+    /** Insert an element */
+    def insert(value : A) {
+      next = Success(value, new Element(next))
+    }
   }
-  
+
   /**
-   * Specifies a change to the input.
+   * Specifies a change to the document.
    *
    * @param pos number of elements before the change
    * @param deleted number of elements deleted
    * @param inserted values to insert
    */
-  def edit(pos : Int, delete: Int, insert : Seq[A]) {
+  def edit(pos : Int, deleted: Int, inserted : Seq[A]) {
     // can do this instead from Scala 2.6.1. on
-    //edit(0, pos, delete, insert.elements)
+    //first.edit(0, pos, delete, insert.elements)
 
-    var values = insert.elements
-    
-    var current = this
+    var values = inserted.elements
+    var current = first
     while (current ne null) {
-      
-      // delete all Failure results up to pos
-      // and all Success results up to pos that point beyond pos
-      if (current.index <= pos) current.map.retain { 
-        case (_, Success(_, elem)) if elem.index < pos => true 
-        case _ => false 
-      }
-      
-      // delete elements
-      if (current.index == pos) for (_ <- 1 to delete) current.next match {
-        case Success(_, element) => current.next = element.next
-        case _ => 
-      }
-        
-      // insert element
-      if (current.index >= pos && values.hasNext) {
-        current.next = Success(values.next(), new EditableInput(current.next))
-      }
-        
+      if (current.index <= pos) current.cleanResults(pos)
+      if (current.index == pos) current.delete(deleted)
+      if (current.index >= pos && values.hasNext) current.insert(values.next)
+          
       current.next match {
         case Success(_, element) => 
           element.index = current.index + 1
@@ -75,47 +94,14 @@ class EditableInput[A](var next : Result[A, EditableInput[A]])
       }
     }
   }
-  
-
-  /** Tail-recursive function.  Will only work from Scala 2.6.1. */
-  private def edit(index: Int, pos : Int, delete: Int, values : Iterator[A]) {
-    // update index
-    this.index = index
-    
-    // delete all Failure results up to pos
-    // and all Success results up to pos that point beyond pos
-    if (index <= pos) map.retain { 
-      case (_, Success(_, elem)) if elem.index < pos => true 
-      case _ => false 
-    }
-    
-    // delete elements
-    if (index == pos) for (_ <- 1 to delete) next match {
-      case Success(_, element) => next = element.next
-      case _ => 
-    }
-      
-    // insert element
-    if (index >= pos && values.hasNext) {
-      next = Success(values.next(), new EditableInput(next))
-    }
-      
-    // tail-recursive call to next element
-    next match {
-      case Success(_, element) => element.edit(index + 1, pos, delete, values)
-      case _ => ()
-    }
-  }
 }
 
-trait IncrementalParser[A] extends Parser[A] with MemoisableRules {
-  type Context = EditableInput[A]
-}
 
 trait IncrementalScanner extends Scanner with MemoisableRules {
-  type Context = EditableInput[Char]
+  type Context = EditableDocument[Char]#Element
 }
 
+  
 trait IncrementalEvaluator extends IncrementalScanner {
   lazy val expr : Rule[Int] = term ~*~ (op('+', _ + _) | op('-', _ - _))
   lazy val term : Rule[Int] = factor ~*~ (op('*', _ * _) | op('/', _ / _))
@@ -130,17 +116,20 @@ trait IncrementalEvaluator extends IncrementalScanner {
 }
   
 object ExampleUsage extends IncrementalEvaluator with Application {
-  var input = new EditableInput[Char]
+  val document = new EditableDocument[Char]
+  val input = document.first
+  
+  document.debug = true
   
   // set up initial text and evaluate
-  input.edit(0, 0, "7 + 5 * (5+ 6 / 2 - 1)")
+  document.edit(0, 0, "7 + 5 * (5+ 6 / 2 - 1)")
   println(evaluate(input))
   
    // change to "7 + (5 + 1) * (5+ 6 / 2 - 1)"
-  input.edit(4, 1, "(5 + 1)")
+  document.edit(4, 1, "(5 + 1)")
   println(evaluate(input))
   
    // change to "(5 + 1) * (5+ 6 / 2 - 1)"
-  input.edit(0, 4, "")
+  document.edit(0, 4, "")
   println(evaluate(input))
 }
