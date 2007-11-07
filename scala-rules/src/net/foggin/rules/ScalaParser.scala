@@ -14,12 +14,25 @@ case class Path(elements : Seq[PathElement]) {
   }
 }
 
+abstract class Type
+abstract class InfixType extends Type
+abstract class ExistentialType extends Type
+
+case class FunctionType(parameterTypes : Seq[FunctionParameterType], resultType : Type) extends Type
+case class FunctionParameterType(parameterType : Type, byName : Boolean)
+
+case class CompoundType(annotTypes : List[AnnotatedType], refinement : Option[Refinement])
+case class Refinement 
+case class AnnotatedType(simpleType : SimpleType, annotations : List[Annotation])
+
 abstract class SimpleType
 case class SingletonType(path : Path) extends SimpleType
 case class TypeDesignator(path : Path) extends SimpleType
 case class TupleType(types : Seq[SimpleType]) extends SimpleType
 case class TypeProjection(simpleType : SimpleType, id : String) extends SimpleType
 case class ParameterizedType(simpleType : SimpleType, typeArgs : Seq[SimpleType]) extends SimpleType
+
+abstract class Annotation
 
 /** Rules based on Scala Language Specification 2.6.0 
  * (copied from Syntax Summary section)
@@ -83,11 +96,12 @@ abstract class ScalaParser extends ScalaScanner {
           
   /** CompoundType ::= AnnotType {with AnnotType} [Refinement]
    *    | Refinement */
-  lazy val compoundType = annotType ~+~ `with` ~ (refinement ?) |
-      refinement
-            
+  lazy val compoundType : Rule[CompoundType] = (
+      annotType ~+~ `with` ~ (refinement ?) ^^ { case as ~ optR => CompoundType(as, optR) }
+      | refinement ^^ { case r => CompoundType(Nil, Some(r)) })
+    
   /** AnnotType ::= {Annotation} SimpleType */
-  lazy val annotType = (annotation *) ~ simpleType
+  lazy val annotType = (annotation *) ~ simpleType ^^ { case as ~ t => AnnotatedType(t, as) }
 
   /** SimpleType ::= SimpleType TypeArgs
    *    | SimpleType ‘#’ id
@@ -117,7 +131,7 @@ abstract class ScalaParser extends ScalaScanner {
   lazy val types : Rule[List[SimpleType]] = simpleType ~+~ comma //typeSpec ~+~ comma
 
   /** Refinement ::= [nl] ‘{’ RefineStat {semi RefineStat} ‘}’ */
-  lazy val refinement = (nl?) -~ curly(refineStat ~+~ semi) 
+  lazy val refinement : Rule[Refinement] = failure //(nl?) -~ curly(refineStat ~+~ semi) 
 
   /** RefineStat ::= Dcl
 | type TypeDef
@@ -368,7 +382,7 @@ id [‘:’ ParamType] */
   lazy val accessQualifier = square(id | `this`)
 
   /** Annotation ::= ‘@’ AnnotationExpr [nl] */
-  lazy val annotation : Rule[Any] = `@` ~ annotationExpr ~ (nl?)
+  lazy val annotation : Rule[Annotation] = failure //`@` ~ annotationExpr ~ (nl?)
 
   /** AnnotationExpr ::= Constr [[nl] ‘{’ {NameValuePair} ‘}’] */
   lazy val annotationExpr = constr ~ ((nl?) ~ curly(nameValuePair*) ?)
