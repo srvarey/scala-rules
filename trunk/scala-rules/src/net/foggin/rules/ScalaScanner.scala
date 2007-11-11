@@ -171,7 +171,7 @@ abstract class ScalaScanner extends Scanner {
   val charElement = charEscapeSeq | printableChar
   val characterLiteral = '\'' -~ (charElement - '\'') ~- '\''
   val stringLiteral = ('\"' -~ charElement *~- '\"' | "\"\"\"" -~ anyChar *~- "\"\"\"") ^^ toString
-  val symbolLiteral = '\'' ~ plainid
+  val symbolLiteral = '\'' -~ plainid ^^ Symbol
   
   val space = (choice(" \t")*) ^^^ " "
   val nl = (space ~ newline ~ space) ^^^ "{nl}"
