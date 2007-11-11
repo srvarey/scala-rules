@@ -114,7 +114,7 @@ abstract class ScalaScanner extends Scanner {
   val unicodeEscape = "\\u" -~ hexDigit >> hex >> hex >> hex ^^ { _.asInstanceOf[Char] }
   val octalEscape = '\\' -~ octalDigit >> octal >> octal ^^ { _.asInstanceOf[Char] }
  
-  val charEscapeSeq = '\\' ~- ( choice("\"\'\\")
+  val charEscapeSeq = '\\' -~ ( choice("\"\'\\")
       | 'b' ^^^ '\b' | 't' ^^^ '\t' | 'n' ^^^ '\n'
       | 'f' ^^^ '\f' | 'r' ^^^ '\r') 
 
