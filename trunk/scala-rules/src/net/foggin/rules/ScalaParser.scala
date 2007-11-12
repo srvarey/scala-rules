@@ -173,7 +173,7 @@ abstract class ScalaParser extends ScalaScanner {
       infixExpr ~ id ~- (nl?) ^^ seq2(PostfixExpression)
       | infixExpr)
       
-  def infixId(start : Rule[Char]) = token(start.unary_& -~ id)
+  def infixId(start : Rule[Char]) = token((start&) -~ id)
       
   def infix(operators : List[Rule[String]]) : Rule[Expression] = {
     val head :: tail = operators
