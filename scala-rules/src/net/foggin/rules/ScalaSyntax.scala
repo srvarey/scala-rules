@@ -15,6 +15,7 @@ case class TupleExpression(exprs : List[Expression]) extends Expression
 case class DotExpression(expr1 : Expression, expr2 : PathElement) extends Expression
 case class ExpressionTypeArgs(expr : Expression, typeArgs : List[Type]) extends Expression
 case class ApplyExpression(expr : Expression, args : List[Expression]) extends Expression
+case class Unapplied(expr : Expression) extends Expression
 
 case class SimpleAssignment(id : String, value : Expression) extends Expression
 case class DotAssignment(expr : Expression, id : String, value : Expression) extends Expression
@@ -30,6 +31,10 @@ case class TryCatchFinally(block : Block, catchClause : Option[CaseClauses], fin
 
 case class Throw(expr : Expression) extends Expression
 case class Return(expr : Option[Expression]) extends Expression
+
+case class PostfixExpression(expr : Expression, id : String) extends Expression
+case class InfixExpression(id : String, left : Expression, right : Expression) extends Expression
+case class PrefixExpression(id : String, expr : Expression) extends Expression
 
 case class Block(statements : List[Statement], resultExpr : Option[Expression]) extends Expression
 
