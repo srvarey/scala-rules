@@ -53,14 +53,14 @@ checkRule(typeSpec)(
      )
      
      checkRule(importStat)(
-         "import A.B, C._" -> Success(List(
+         "import A.B, C._" -> ImportStatement(List(
              Import(List(Name("A")), List(ImportSelector("B", None))), 
-             Import(List(Name("C")), List(ImportSelector("_", None)))), ""),
+             Import(List(Name("C")), List(ImportSelector("_", None))))),
              
-         "import A.{b => c, _}" -> Success(List(
+         "import A.{b => c, _}" -> ImportStatement(List(
              Import(List(Name("A")),List(
                  ImportSelector("b",Some("c")), 
-                 ImportSelector("_",None)))),"")
+                 ImportSelector("_",None)))))
      )
      
      checkRule(expr)(
@@ -83,7 +83,26 @@ checkRule(typeSpec)(
          
          "throw x" -> Throw(Name("x")),
          "return x" -> Return(Some(Name("x"))),
-         "return" -> Return(None)
+         "return" -> Return(None),
+         
+         "try { 1 } catch { case e => println(e) } finally { println(\"finally!\") }" -> TryCatchFinally(
+             Block(List(),Some(Literal(1))),
+             Some(CaseClauses(List(
+                 CaseClause(VariablePattern("e"), None, Block(
+                     List(), Some(ApplyExpression(Name("println"), List(Name("e"))))))))),
+             Some(Block(List(), Some(ApplyExpression(Name("println"),List(Literal("finally!"))))))),
+             
+          "for (i <- list; val j = i; if true) yield j" -> ForComprehension(List(
+              Generator(VariablePattern("i"), Name("list"), None), 
+              ValEnumerator(VariablePattern("j"), Name("i")), 
+              Guard(Literal("true"))), 
+              true, Name("j")),
+              
+          "a = 1" -> SimpleAssignment("a",Literal(1)),
+          
+          "a.b = 1" -> DotAssignment(Name("a"), "b", Literal(1)),
+          
+          "a(b) = 1" -> Update(Name("a"), List(Name("b")), Literal(1))
          
      )
      
@@ -99,7 +118,8 @@ checkRule(typeSpec)(
          "a ~ b" -> InfixPattern(VariablePattern("a"),List(("~",VariablePattern("b")))),
          "a @ (x, y)" -> AtPattern("a",TupleExpression(List(VariablePattern("x"), VariablePattern("y")))),
          "a : A" -> TypedVariablePattern("a", TypeDesignator(List(), "A")),
-         "_ : A" -> TypePattern(TypeDesignator(List(), "A"))
+         "_ : A" -> TypePattern(TypeDesignator(List(), "A")),
+         "1 | 2" -> OrPattern(List(Literal(1), Literal(2)))
      )
      
 println("ScalaParser tests passed")
