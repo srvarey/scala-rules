@@ -135,35 +135,39 @@ abstract class ScalaParser extends ScalaScanner {
   lazy val expr = expr1 //= (bindings | id) ~ `=>` ~ expr | expr1
 
   /** Expr1 ::= if ‘(’ Expr ‘)’ {nl} Expr [[semi] else Expr]
-| while ‘(’ Expr ‘)’ {nl} Expr
-| try ‘{’ Block ‘}’ [catch ‘{’ CaseClauses ‘}’]
-[finally Expr]
-| do Expr [semi] while ‘(’ Expr ’)’
-| for (‘(’ Enumerators ‘)’ | ‘{’ Enumerators ‘}’)
-{nl} [yield] Expr
-| throw Expr
-| return [Expr]
-| [SimpleExpr ‘.’] id ‘=’ Expr
-| SimpleExpr1 ArgumentExprs ‘=’ Expr
-| PostfixExpr
-| PostfixExpr Ascription
-| PostfixExpr match ‘{’ CaseClauses ‘}’ */
-      
+   *     | while ‘(’ Expr ‘)’ {nl} Expr
+   *     | try ‘{’ Block ‘}’ [catch ‘{’ CaseClauses ‘}’] [finally Expr]
+   *     | do Expr [semi] while ‘(’ Expr ’)’
+   *     | for (‘(’ Enumerators ‘)’ | ‘{’ Enumerators ‘}’) {nl} [yield] Expr
+   *     | throw Expr
+   *     | return [Expr]
+   *     | [SimpleExpr ‘.’] id ‘=’ Expr
+   *     | SimpleExpr1 ArgumentExprs ‘=’ Expr
+   *     | PostfixExpr
+   *     | PostfixExpr Ascription
+   *     | PostfixExpr match ‘{’ CaseClauses ‘}’ 
+   */
   lazy val expr1 : Rule[Expression] = (
       `if` -~ round(expr) ~- (nl*) ~ expr ~ ((semi?) -~ `else` -~ expr ?) ^^ seq3(IfExpression)
       | `while` -~ round(expr)  ~- (nl*) ~ expr ^^ seq2(WhileExpression)
-      //| `try` ~ curly(block) ~ (`catch` ~ curly(caseClauses) ?) ~ (`finally` ~ expr)
+      | `try` -~ curly(block) ~ (`catch` -~ curly(caseClauses) ?) ~ (`finally` -~ expr ?) ^^ seq3(TryCatchFinally)
       | `do` -~ expr ~- (semi?) ~- `while` ~ round(expr) ^^ seq2(DoExpression)
-      //| `for` ~ (round(enumerators) | curly(enumerators))  ~ (nl*) ~ (`yield`?) ~ expr
+      | `for` -~ (round(enumerators) | curly(enumerators))  ~- (nl*) ~ ((`yield`?) ^^ (_.isDefined)) ~ expr ^^ seq3(ForComprehension)
       | `throw` -~ expr ^^ Throw
       | `return` -~ (expr?) ^^ Return
-      //| (simpleExpr ~ dot ?) ~ id ~ `=` ~ expr
-      //| simpleExpr1 ~ argumentExprs ~ `=` ~ expr
+      | assignment
       //| postfixExpr
       //| postfixExpr ~ ascription
       //| postfixExpr ~ `match`~ curly(caseClauses))
       | postfixExpr)
       
+  lazy val assignment = simpleExpr ~- `=` ~ expr >> {
+    case Name(id) ~ value => success(SimpleAssignment(id, value))
+    case DotExpression(expr, Name(id)) ~ value => success(DotAssignment(expr, id, value))
+    case ApplyExpression(expr, args) ~ value => success(Update(expr, args, value))
+    case _ => failure
+  }
+    
   /** PostfixExpr ::= InfixExpr [id [nl]] */
   lazy val postfixExpr = infixExpr  // ~ (id ~ (nl?) ?)
 
@@ -176,11 +180,11 @@ abstract class ScalaParser extends ScalaScanner {
   /** SimpleExpr ::= new (ClassTemplate | TemplateBody)
    *     | BlockExpr
    *     | SimpleExpr1 [‘_’] */
-  lazy val simpleExpr = simpleExpr1 /*(
-      `new` ~ (classTemplate | templateBody)
-      | blockExpr
-      | simpleExpr1 ~ `_`
-      | simpleExpr1)*/
+  lazy val simpleExpr = (
+      //`new` ~ (classTemplate | templateBody)
+      blockExpr
+      //| simpleExpr1 ~ `_`
+      | simpleExpr1)
 
   /** SimpleExpr1 ::= Literal
    *     | Path
@@ -218,17 +222,17 @@ abstract class ScalaParser extends ScalaScanner {
   lazy val argumentExprs = round(exprs ~- (comma?) | success(Nil)) // | (nl?) ~ blockExpr
 
   /** BlockExpr ::= ‘{’ CaseClauses ‘}’ | ‘{’ Block ‘}’ */
-  lazy val blockExpr = curly(caseClauses | block)
+  lazy val blockExpr : Rule[Expression] = curly(caseClauses | block)
 
   /** Block ::= {BlockStat semi} [ResultExpr] */
-  lazy val block : Rule[Any] = (blockStat ~ semi *) ~ (resultExpr?)
-
+  lazy val block = (blockStat ~- semi *) ~ (resultExpr?) ^^ seq2(Block)
+ 
   /** BlockStat ::= Import
    *     | [implicit] Def
    *     | {LocalModifier} TmplDef
    *     | Expr1
    */
-  lazy val blockStat  : Rule[Any] = (
+  lazy val blockStat  : Rule[Statement] = (
       importStat
       //| (`implicit`?) ~ definition
       //| (localModifier *) ~ tmplDef
@@ -239,28 +243,32 @@ abstract class ScalaParser extends ScalaScanner {
   lazy val resultExpr = expr1 // | (bindings | id ~ `:` ~ compoundType) ~ `=>` ~ block
 
   /** Enumerators ::= Generator {semi Enumerator} */
-  lazy val enumerators = generator ~ (semi ~ enumerator *)
+  lazy val enumerators = generator ~++ (semi -~ enumerator *)
 
   /** Enumerator ::= Generator
-| Guard
-| val Pattern1 ‘=’ Expr */
-  lazy val enumerator = generator | guard | `val` ~ pattern1 ~ `=` ~ expr
+   *     | Guard
+   *     | val Pattern1 ‘=’ Expr */
+  lazy val enumerator : Rule[Enumerator] = (
+      generator 
+      | guard ^^ Guard 
+      | `val` -~ pattern1 ~- `=` ~ expr ^^ seq2(ValEnumerator))
 
-  /** Generator ::= Pattern1 ‘<’
-Expr [Guard] */
-  lazy val generator = pattern1 ~ `<-` ~ expr ~ (guard?)
+  /** Generator ::= Pattern1 ‘<-’ Expr [Guard] */
+  lazy val generator = pattern1 ~- `<-` ~ expr ~ (guard?) ^^ seq3(Generator)
 
   /** CaseClauses ::= CaseClause { CaseClause } */
-  lazy val caseClauses = caseClause+
+  lazy val caseClauses = (caseClause+) ^^ CaseClauses
 
   /** CaseClause ::= case Pattern [Guard] ‘=>’ Block */
-  lazy val caseClause = `case` ~ pattern ~ (guard?) ~ `=>` ~ block
+  lazy val caseClause = `case` -~ pattern ~ (guard?) ~- `=>` ~ block ^^ seq3(CaseClause)
 
   /** Guard ::= ‘if’ PostfixExpr */
-  lazy val guard = `if` ~ postfixExpr
+  lazy val guard = `if` -~ postfixExpr
 
   /** Pattern ::= Pattern1 { ‘|’ Pattern1 } */
-  lazy val pattern = pattern1 // ~+~ `|` 
+  lazy val pattern = (
+      pattern1 ~++ (`|` -~ pattern1 +)  ^^ OrPattern
+      | pattern1)
 
   /** Pattern1 ::= varid ‘:’ TypePat
 | ‘_’ ‘:’ TypePat
@@ -278,7 +286,7 @@ Expr [Guard] */
 
   /** Pattern3 ::= SimplePattern | SimplePattern { id [nl] SimplePattern } */
   lazy val pattern3 : Rule[Expression] = (
-      simplePattern ~ ((id ~- (nl?) ~ simplePattern ^^ { case a ~ b => (a, b) })+) ^^ seq2(InfixPattern)
+      simplePattern ~ (((id -`|`) ~- (nl?) ~ simplePattern ^^ { case a ~ b => (a, b) })+) ^^ seq2(InfixPattern)
       | simplePattern)
 
   /** SimplePattern ::= ‘_’
@@ -414,7 +422,7 @@ TemplateStat {semi TemplateStat} ‘}’ */
       | expr)
 
   /** Import ::= import ImportExpr {‘,’ ImportExpr} */
-  lazy val importStat = `import` -~ (importExpr ~+~ comma)
+  lazy val importStat : Rule[Statement] = `import` -~ (importExpr ~+~ comma) ^^ ImportStatement
 
   /** ImportExpr ::= StableId ‘.’ (id | ‘_’ | ImportSelectors) */
   lazy val importExpr : Rule[Import] = (

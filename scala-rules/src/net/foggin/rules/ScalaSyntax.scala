@@ -1,6 +1,7 @@
 package net.foggin.rules;
 
-trait Expression
+trait Statement
+trait Expression extends Statement
 
 abstract class PathElement extends Expression
 
@@ -15,14 +16,30 @@ case class DotExpression(expr1 : Expression, expr2 : PathElement) extends Expres
 case class ExpressionTypeArgs(expr : Expression, typeArgs : List[Type]) extends Expression
 case class ApplyExpression(expr : Expression, args : List[Expression]) extends Expression
 
+case class SimpleAssignment(id : String, value : Expression) extends Expression
+case class DotAssignment(expr : Expression, id : String, value : Expression) extends Expression
+case class Update(expr : Expression, args : List[Expression], value : Expression) extends Expression
+
 case class IfExpression(cond : Expression, expr : Expression, elseExpr : Option[Expression]) extends Expression
 case class WhileExpression(cond : Expression, expr : Expression) extends Expression
 case class DoExpression(expr : Expression, cond : Expression) extends Expression
 
+case class ForComprehension(enumerators : List[Enumerator], generator : Boolean, expr : Expression) extends Expression
+
+case class TryCatchFinally(block : Block, catchClause : Option[CaseClauses], finallyClause : Option[Expression]) extends Expression
+
 case class Throw(expr : Expression) extends Expression
 case class Return(expr : Option[Expression]) extends Expression
 
+case class Block(statements : List[Statement], resultExpr : Option[Expression]) extends Expression
 
+case class CaseClause(pattern : Expression, guard : Option[Expression], block : Block)
+case class CaseClauses(clauses : List[CaseClause]) extends Expression
+
+trait Enumerator
+case class Generator(pattern : Expression, expr : Expression, guard : Option[Expression]) extends Enumerator
+case class Guard(guard : Expression) extends Enumerator
+case class ValEnumerator(pattern : Expression, expr : Expression) extends Enumerator
 
 
 case class VariablePattern(id : String) extends Expression
@@ -31,6 +48,7 @@ case class InfixPattern(left : Expression, rest : List[(String, Expression)]) ex
 case class AtPattern(id : String, pattern : Expression) extends Expression
 case class TypedVariablePattern(id : String, typeSpec : Type) extends Expression
 case class TypePattern(typeSpec : Type) extends Expression
+case class OrPattern(patterns : List[Expression]) extends Expression
 
 
 abstract class Type
@@ -52,7 +70,7 @@ case class ParameterizedType(simpleType : SimpleType, typeArgs : Seq[Type]) exte
 
 abstract class Annotation
 
-abstract class Declaration
+trait Declaration extends Statement
 case class ValDeclaration(ids : List[String], typeSpec : Type) extends Declaration
 case class VarDeclaration(ids : List[String], typeSpec : Type) extends Declaration
 
@@ -77,5 +95,6 @@ case object Contravariant extends Variance
 
 case class Parameter(id : String, byName : Boolean, typeSpec : Option[Type], varArgs : Boolean, annotations : List[Annotation])
 
+case class ImportStatement(imports : List[Import]) extends Statement
 case class Import(path : List[PathElement], selectors : List[ImportSelector])
 case class ImportSelector(id : String, as : Option[String])
