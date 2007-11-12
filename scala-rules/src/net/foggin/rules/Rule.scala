@@ -46,6 +46,18 @@ class Rule[S, +A](f : S => Result[A, S]) extends (S => Result[A, S])
   
   def ^^^[B](b : B) = map { any => b }
   
+  def ^~^[B1, B2, B >: A <% B1 ~ B2, C](f : (B1, B2) => C) = map { b => 
+    f(b._1, b._2) 
+  }
+  
+  def ^~^~^[B1, B2, B3, B >: A <% B1 ~ B2 ~ B3, C](f : (B1, B2, B3) => C) = map { b =>
+    f(b._1._1, b._1._2, b._2)
+  }
+  
+  //def seq2[B, C, D](f : (B, C) => D)(ab : B ~ C) : D = ab match { case a ~ b => f(a, b) }
+  //def seq3[A, B, C, D](f : (A, B, C) => D)(abc : A ~ B ~ C) : D = abc match { case a ~ b ~ c => f(a, b, c) }
+
+  
   def >>[B](f : A => Rule[S, B]) = flatMap(f)
   
   def ~[B](next : => Rule[S, B]) = for (a <- this; b <- next) yield new ~(a, b)
