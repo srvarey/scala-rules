@@ -64,7 +64,7 @@ case class FunctionType(parameterTypes : Seq[(Type, Boolean)], resultType : Type
 case class InfixType(id : String, left : Type, right : Type) extends Type
 case class CompoundType(annotTypes : List[Type], refinement : Option[Refinement]) extends Type
 case class Refinement extends Type
-case class AnnotatedType(annotated : SimpleType, annotations : List[Annotation]) extends Type
+case class AnnotatedType(annotations : List[Annotation], annotated : SimpleType) extends Type
 
 abstract class SimpleType extends Type
 case class SingletonType(path : List[PathElement]) extends SimpleType

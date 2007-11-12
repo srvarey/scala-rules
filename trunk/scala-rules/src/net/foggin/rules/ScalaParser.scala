@@ -7,11 +7,6 @@ package net.foggin.rules;
  */
 abstract class ScalaParser extends ScalaScanner {
   
-  def seq2[A, B, C](f : (A, B) => C)(ab : A ~ B) : C = ab match { case a ~ b => f(a, b) }
-  def seq3[A, B, C, D](f : (A, B, C) => D)(abc : A ~ B ~ C) : D = abc match { case a ~ b ~ c => f(a, b, c) }
-  
-
-  
   // TODO: allow {nl} within round and square
   def round[T](rule : Rule[T]) = token('(') -~ rule ~- token(')')
   def square[T](rule : Rule[T]) = token('[') -~ rule ~- token(']')
@@ -84,7 +79,7 @@ abstract class ScalaParser extends ScalaScanner {
     
   /** AnnotType ::= {Annotation} SimpleType */
   lazy val annotType = (
-    (annotation +) ~ simpleType ^^ { case as ~ t => AnnotatedType(t, as) }
+    (annotation +) ~ simpleType ^~^ AnnotatedType
     | simpleType)
 
   /** SimpleType ::= SimpleType TypeArgs
@@ -148,11 +143,11 @@ abstract class ScalaParser extends ScalaScanner {
    *     | PostfixExpr match ‘{’ CaseClauses ‘}’ 
    */
   lazy val expr1 : Rule[Expression] = (
-      `if` -~ round(expr) ~- (nl*) ~ expr ~ ((semi?) -~ `else` -~ expr ?) ^^ seq3(IfExpression)
-      | `while` -~ round(expr)  ~- (nl*) ~ expr ^^ seq2(WhileExpression)
-      | `try` -~ curly(block) ~ (`catch` -~ curly(caseClauses) ?) ~ (`finally` -~ expr ?) ^^ seq3(TryCatchFinally)
-      | `do` -~ expr ~- (semi?) ~- `while` ~ round(expr) ^^ seq2(DoExpression)
-      | `for` -~ (round(enumerators) | curly(enumerators))  ~- (nl*) ~ ((`yield`?) ^^ (_.isDefined)) ~ expr ^^ seq3(ForComprehension)
+      `if` -~ round(expr) ~- (nl*) ~ expr ~ ((semi?) -~ `else` -~ expr ?) ^~^~^ IfExpression
+      | `while` -~ round(expr)  ~- (nl*) ~ expr ^~^ WhileExpression
+      | `try` -~ curly(block) ~ (`catch` -~ curly(caseClauses) ?) ~ (`finally` -~ expr ?) ^~^~^ TryCatchFinally
+      | `do` -~ expr ~- (semi?) ~- `while` ~ round(expr) ^~^ DoExpression
+      | `for` -~ (round(enumerators) | curly(enumerators))  ~- (nl*) ~ ((`yield`?) ^^ (_.isDefined)) ~ expr ^~^~^ ForComprehension
       | `throw` -~ expr ^^ Throw
       | `return` -~ (expr?) ^^ Return
       | assignment
@@ -170,7 +165,7 @@ abstract class ScalaParser extends ScalaScanner {
     
   /** PostfixExpr ::= InfixExpr [id [nl]] */
   lazy val postfixExpr = (
-      infixExpr ~ id ~- (nl?) ^^ seq2(PostfixExpression)
+      infixExpr ~ id ~- (nl?) ^~^ PostfixExpression
       | infixExpr)
       
   def infixId(start : Rule[Char]) = token((start&) -~ id)
@@ -198,7 +193,7 @@ abstract class ScalaParser extends ScalaScanner {
   val infixExpr = infix(operators)
 
   /** PrefixExpr ::= [‘-’ | ‘+’ | ‘~’ | ‘!’] SimpleExpr */
-  lazy val prefixExpr = ((plus | minus | bang | tilde) ~ simpleExpr ^^ seq2(PrefixExpression)
+  lazy val prefixExpr = ((plus | minus | bang | tilde) ~ simpleExpr ^~^ PrefixExpression
       | simpleExpr)
 
   /** SimpleExpr ::= new (ClassTemplate | TemplateBody)
@@ -249,7 +244,7 @@ abstract class ScalaParser extends ScalaScanner {
   lazy val blockExpr : Rule[Expression] = curly(caseClauses | block)
 
   /** Block ::= {BlockStat semi} [ResultExpr] */
-  lazy val block = (blockStat ~- semi *) ~ (resultExpr?) ^^ seq2(Block)
+  lazy val block = (blockStat ~- semi *) ~ (resultExpr?) ^~^ Block
  
   /** BlockStat ::= Import
    *     | [implicit] Def
@@ -275,16 +270,16 @@ abstract class ScalaParser extends ScalaScanner {
   lazy val enumerator : Rule[Enumerator] = (
       generator 
       | guard ^^ Guard 
-      | `val` -~ pattern1 ~- `=` ~ expr ^^ seq2(ValEnumerator))
+      | (`val` -~ pattern1 ~- `=`) ~ expr ^~^ ValEnumerator)
 
   /** Generator ::= Pattern1 ‘<-’ Expr [Guard] */
-  lazy val generator = pattern1 ~- `<-` ~ expr ~ (guard?) ^^ seq3(Generator)
+  lazy val generator = pattern1 ~- `<-` ~ expr ~ (guard?) ^~^~^ Generator
 
   /** CaseClauses ::= CaseClause { CaseClause } */
   lazy val caseClauses = (caseClause+) ^^ CaseClauses
 
   /** CaseClause ::= case Pattern [Guard] ‘=>’ Block */
-  lazy val caseClause = `case` -~ pattern ~ (guard?) ~- `=>` ~ block ^^ seq3(CaseClause)
+  lazy val caseClause = `case` -~ pattern ~ (guard?) ~- `=>` ~ block ^~^~^ CaseClause
 
   /** Guard ::= ‘if’ PostfixExpr */
   lazy val guard = `if` -~ postfixExpr
@@ -298,19 +293,19 @@ abstract class ScalaParser extends ScalaScanner {
 | ‘_’ ‘:’ TypePat
 | Pattern2 */
   lazy val pattern1 = (
-    varid ~- `:` ~ typePat ^^ seq2(TypedVariablePattern)
+    varid ~- `:` ~ typePat ^~^ TypedVariablePattern
     | `_` -~ `:`-~ typePat ^^ TypePattern
     | pattern2)
 
   /** Pattern2 ::= varid [‘@’ Pattern3]
 | Pattern3 */
   lazy val pattern2 = (
-      (varid ~- `@` ~ pattern3) ^^ seq2(AtPattern)
+      (varid ~- `@` ~ pattern3) ^~^ AtPattern
       | pattern3)
 
   /** Pattern3 ::= SimplePattern | SimplePattern { id [nl] SimplePattern } */
   lazy val pattern3 : Rule[Expression] = (
-      simplePattern ~ (((id -`|`) ~- (nl?) ~ simplePattern ^^ { case a ~ b => (a, b) })+) ^^ seq2(InfixPattern)
+      simplePattern ~ (((id -`|`) ~- (nl?) ~ simplePattern ^^ { case a ~ b => (a, b) })+) ^~^ InfixPattern
       | simplePattern)
 
   /** SimplePattern ::= ‘_’
@@ -463,7 +458,7 @@ TemplateStat {semi TemplateStat} ‘}’ */
   lazy val importSelectors : Rule[List[ImportSelector]] = curly((importSelector ~- comma *) ~ (importSelector | wildcardImportSelector)) ^^ { case ss ~ s => (s :: ss.reverse).reverse }
 
   /** ImportSelector ::= id [‘=>’ id | ‘=>’ ‘_’] */
-  lazy val importSelector = id ~ (`=>` -~ (id | `_`) ?) ^^ seq2(ImportSelector)
+  lazy val importSelector = id ~ (`=>` -~ (id | `_`) ?) ^~^ ImportSelector
   lazy val wildcardImportSelector = `_` ^^^ ImportSelector("_", None)
 
   /** Dcl ::= val ValDcl
