@@ -81,8 +81,10 @@ class Rule[S, +A](f : S => Result[A, S]) extends (S => Result[A, S])
   def unary_! = for (s <- Rule.get[S] if !apply(s).isSuccess) yield s
        
   /** Creates a rule that suceeds if this rule would succeed but returns an unmodified context. 
-   * N.B. won't work properly because of deprecated syntax for unapplied method? */
-  def unary_& = for (s <- Rule.get[S] if apply(s).isSuccess) yield s
+   *
+   * N.B. can't be prefix operator - according to Scala syntax only '+', '-', '~' and '!' can be prefix. 
+   */
+  def & = for (s <- Rule.get[S] if apply(s).isSuccess) yield s
   
   def -(exclude : => Rule[S, Any]) = !exclude -~ this
     
