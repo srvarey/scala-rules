@@ -169,13 +169,37 @@ abstract class ScalaParser extends ScalaScanner {
   }
     
   /** PostfixExpr ::= InfixExpr [id [nl]] */
-  lazy val postfixExpr = infixExpr  // ~ (id ~ (nl?) ?)
+  lazy val postfixExpr = (
+      infixExpr ~ id ~- (nl?) ^^ seq2(PostfixExpression)
+      | infixExpr)
+      
+  def infixId(start : Rule[Char]) = token(start.unary_& -~ id)
+      
+  def infix(operators : List[Rule[String]]) : Rule[Expression] = {
+    val head :: tail = operators
+    val next = if (tail == Nil) prefixExpr else infix(tail)
+    val op : Rule[(Expression, Expression) => Expression] = head ^^ { id => InfixExpression(id, _, _) }
+    next ~*~ op
+  }
+  
+  val operators : List[Rule[String]] = List(
+      infixId(letter),
+      infixId('|'),
+      infixId('^'),
+      infixId('&'),
+      infixId(choice("<>")),
+      infixId(choice("=!")),
+      infixId(':'),
+      infixId(choice("+-")),
+      infixId(choice("*/%")),
+      infixId(opChar - choice("|^&<>=!:+-*/%")))
 
   /** InfixExpr ::= PrefixExpr | InfixExpr id [nl] InfixExpr */
-  lazy val infixExpr = prefixExpr // | infixExpr ~ id ~ (nl?) ~ infixExpr
+  val infixExpr = infix(operators)
 
   /** PrefixExpr ::= [‘-’ | ‘+’ | ‘~’ | ‘!’] SimpleExpr */
-  lazy val prefixExpr = simpleExpr // ((plus | minus | bang | tilde) ?) ~ simpleExpr
+  lazy val prefixExpr = ((plus | minus | bang | tilde) ~ simpleExpr ^^ seq2(PrefixExpression)
+      | simpleExpr)
 
   /** SimpleExpr ::= new (ClassTemplate | TemplateBody)
    *     | BlockExpr
@@ -183,7 +207,7 @@ abstract class ScalaParser extends ScalaScanner {
   lazy val simpleExpr = (
       //`new` ~ (classTemplate | templateBody)
       blockExpr
-      //| simpleExpr1 ~ `_`
+      | simpleExpr1 ~- `_` ^^ Unapplied
       | simpleExpr1)
 
   /** SimpleExpr1 ::= Literal

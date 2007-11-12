@@ -102,7 +102,15 @@ checkRule(typeSpec)(
           
           "a.b = 1" -> DotAssignment(Name("a"), "b", Literal(1)),
           
-          "a(b) = 1" -> Update(Name("a"), List(Name("b")), Literal(1))
+          "a(b) = 1" -> Update(Name("a"), List(Name("b")), Literal(1)),
+          
+          "a b" -> PostfixExpression(Name("a"),"b"),
+          
+          "1 + 2 * 3" -> InfixExpression("+", Literal(1), InfixExpression("*", Literal(2), Literal(3))),
+          
+          "-1" -> PrefixExpression("-", Literal(1)),
+          
+          "a _" -> Unapplied(Name("a"))
          
      )
      
