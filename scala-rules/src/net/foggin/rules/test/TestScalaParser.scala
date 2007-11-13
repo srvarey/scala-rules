@@ -44,10 +44,11 @@ checkRule(typeSpec)(
              Parameter("d",false,Some(TypeDesignator(List(),"D")),false,List()))),
          Some(TypeDesignator(List(),"A"))),
          
-     "type A[+B <: C, -D >: E, F <% G] >: H <: I" -> TypeDeclaration("A", List(
-         VariantTypeParameter("B", None, Some(TypeDesignator(List(), "C")), None, Covariant), 
-         VariantTypeParameter("D", Some(TypeDesignator(List(), "E")), None,None,Contravariant), 
-         VariantTypeParameter("F", None, None, Some(TypeDesignator(List(), "G")), Invariant)),
+     "type A[+B <: C, -D >: E, F <% G] >: H <: I" -> TypeDeclaration("A", 
+         Some(List(
+             VariantTypeParameter("B", None, Some(TypeDesignator(List(), "C")), None, Covariant), 
+             VariantTypeParameter("D", Some(TypeDesignator(List(), "E")), None,None,Contravariant), 
+             VariantTypeParameter("F", None, None, Some(TypeDesignator(List(), "G")), Invariant))),
          Some(TypeDesignator(List(), "H")),
          Some(TypeDesignator(List(), "I")))
      )
