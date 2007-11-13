@@ -112,18 +112,16 @@ case class Import(path : List[PathElement], selectors : List[ImportSelector])
 case class ImportSelector(id : String, as : Option[String])
 
 sealed abstract class Modifier
-sealed abstract class LocalModifier
-sealed abstract class AccessModifier
 
 case object Override extends Modifier
-case object Abstract extends LocalModifier
-case object Final extends LocalModifier
-case object Sealed extends LocalModifier
-case object Implicit extends LocalModifier
-case object Lazy extends LocalModifier
+case object Abstract extends Modifier
+case object Final extends Modifier
+case object Sealed extends Modifier
+case object Implicit extends Modifier
+case object Lazy extends Modifier
 
-case class Private(qualifier : Option[PathElement]) extends AccessModifier
-case class Protected(qualifier : Option[PathElement]) extends AccessModifier
+case class Private(qualifier : Option[PathElement]) extends Modifier
+case class Protected(qualifier : Option[PathElement]) extends Modifier
 
 trait Definition extends Statement
 
@@ -144,14 +142,29 @@ case class ProcedureDefinition(id : String,
     implicitParamClause : Option[List[Parameter]], 
     expr : Expression) extends Definition
 
+case class ConstructorExpression(
+    selfInvocationArguments : List[List[Expression]], 
+    statements : List[Statement])
+    
 case class ConstructorDefinition(
     paramClauses : List[List[Parameter]], 
     implicitParamClause : Option[List[Parameter]], 
-    expr : Expression) extends Definition
+    expr : ConstructorExpression) extends Definition
     
 case class TypeDefinition(id : String, 
     typeParameters : Option[List[VariantTypeParameter]], 
     typeSpec : Type) extends Definition
+    
+case class TraitDefinition(id : String,
+    typeParameters : Option[List[VariantTypeParameter]], 
+    traitTemplate : TraitTemplate) extends Definition
+    
+case class TraitTemplate(earlyDefs : Option[List[AnnotatedDefinition]], parents : List[Type], templateBody : Option[TemplateBody])
+    
+case class TemplateBody(alias : Option[String], selfType : Option[Type], statements : List[Statement])
+
+case class AnnotatedDeclaration(annotations : List[Annotation], modifiers : List[Modifier], declaration : Declaration) extends Statement
+case class AnnotatedDefinition(annotations : List[Annotation], modifiers : List[Modifier], definition : Definition) extends Statement
 
     
     

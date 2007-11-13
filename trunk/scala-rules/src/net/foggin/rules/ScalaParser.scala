@@ -385,8 +385,7 @@ abstract class ScalaParser extends ScalaScanner {
   /** ClassParams ::= ClassParam {‘’ ClassParam} */
   lazy val classParams = classParam ~+~ comma
 
-  /** ClassParam ::= {Annotation} [{Modifier} (‘val’ | ‘var’)]
-id [‘:’ ParamType] */
+  /** ClassParam ::= {Annotation} [{Modifier} (‘val’ | ‘var’)] id [‘:’ ParamType] */
   lazy val classParam = (annotation*) ~ ((modifier*) ~ (`val` | `var`) ?) ~ id ~ (`:` ~ paramType ?)
 
   /** Bindings ::= ‘(’ Binding {‘,’ Binding ‘)’ */
@@ -397,22 +396,24 @@ id [‘:’ ParamType] */
 
   /** Modifier ::= LocalModifier
    *     | AccessModifier
-   *     | override */
-  lazy val modifier = localModifier | accessModifier | `override`^^^ Override
+   *     | override 
+   */
+  lazy val modifier : Rule[Modifier] = localModifier | accessModifier | `override`^^^ Override
 
   /** LocalModifier ::= abstract
    *     | final
    *     | sealed
    *     | implicit
-   *     | lazy */
-  lazy val localModifier = (`abstract` ^^^ Abstract
+   *     | lazy 
+   */
+  lazy val localModifier : Rule[Modifier]  = (`abstract` ^^^ Abstract
       | `final` ^^^ Final
       | `sealed` ^^^ Sealed
       | `implicit` ^^^ Implicit
       | `lazy` ^^^ Lazy)
 
   /** AccessModifier ::= (private | protected) [AccessQualifier] */
-  lazy val accessModifier = (`private` -~ (accessQualifier?) ^^ Private
+  lazy val accessModifier : Rule[Modifier] = (`private` -~ (accessQualifier?) ^^ Private
       | `protected`-~ (accessQualifier?) ^^ Protected) 
 
   /** AccessQualifier ::= ‘[’ (id | this) ‘]’ */
@@ -427,18 +428,21 @@ id [‘:’ ParamType] */
   /** NameValuePair ::= val id ‘=’ PrefixExpr */
   lazy val nameValuePair = `val` ~ id ~ prefixExpr
 
-  /** TemplateBody ::= [nl] ‘{’ [id [‘:’ Type] ‘=>’]
-TemplateStat {semi TemplateStat} ‘}’ */
-  lazy val templateBody : Rule[Any] = (nl?) ~ curly((id ~ (`:` ~ typeSpec ?) ~ `=>` ?) ~ (templateStat ~+~ semi))
+  /** TemplateBody ::= [nl] ‘{’ [id [‘:’ Type] ‘=>’] TemplateStat {semi TemplateStat} ‘}’ */
+  lazy val templateBody = (nl?) -~ curly(selfType ~ (templateStat ~+~ semi)) ^~~^ TemplateBody
 
+  lazy val selfType = ((id ^^ Some[String]) ~ (`:` -~ typeSpec ?)  ~- `=>`
+      | (`this` ^^^ None) ~ (`:` -~ typeSpec ^^ Some[Type]) ~- `=>` 
+      | success(None) ~ success(None))
+  
   /** TemplateStat ::= Import
    *     | {Annotation} {Modifier} Def
    *     | {Annotation} {Modifier} Dcl
    *     | Expr
    */
   lazy val templateStat = (importStat
-      | (annotation*) ~ (modifier*) ~ definition
-      | (annotation*) ~ (modifier*) ~ dcl
+      | (annotation*) ~ (modifier*) ~ definition ^~~^ AnnotatedDefinition
+      | (annotation*) ~ (modifier*) ~ dcl ^~~^ AnnotatedDeclaration
       | expr)
 
   /** Import ::= import ImportExpr {‘,’ ImportExpr} */
@@ -507,15 +511,25 @@ TemplateStat {semi TemplateStat} ‘}’ */
    *
    *  ParamClauses ::= {ParamClause} [[nl] ‘(’ implicit Params ‘)’] 
    */
-  lazy val definition = (
+  lazy val definition : Rule[Definition] = (
       `val` -~ patDef ^~~^ ValPatternDefinition
       | `var` -~ patDef ^~~^ VarPatternDefinition
-      | (`var` -~ ids) ~ (`:` -~ typeSpec ~- `=` ~- `_`) ^~^ VarDefaultDefinition
+      | `var` -~ ids ~ (`:` -~ typeSpec ~- `=` ~- `_`) ^~^ VarDefaultDefinition
       | `def` -~ funSig ~ (`:` -~ typeSpec ?) ~ (`=` -~ expr) ^~~~~~^ FunctionDefinition
       | `def` -~ funSig ~ ((nl?) -~ curly(block)) ^~~~~^ ProcedureDefinition
-      //| `def` -~ `this` ~ (paramClause+) ~ (implicitParamClause?) ~ (`=` ~ constrExpr | (nl?) ~ constrBlock))
+      | `def` -~ `this` -~ (paramClause+) ~ (implicitParamClause?) ~ (`=` -~ constrExpr | (nl?) -~ constrBlock) ^~~^ ConstructorDefinition
       | `type` -~ (nl*) -~ typeDef ^~~^ TypeDefinition
       | tmplDef)
+
+  /** ConstrExpr ::= SelfInvocation | ConstrBlock */
+  lazy val constrExpr : Rule[ConstructorExpression] = (selfInvocation ^^ (ConstructorExpression(_, Nil)) 
+      | constrBlock)
+
+  /** ConstrBlock ::= ‘{’ SelfInvocation {semi BlockStat} ‘}’ */
+  lazy val constrBlock = curly(selfInvocation ~ (semi -~ blockStat *)) ^~^ ConstructorExpression
+
+  /** SelfInvocation ::= this ArgumentExprs {ArgumentExprs} */
+  lazy val selfInvocation = `this` -~ (argumentExprs+)
 
 
   /** PatDef ::= Pattern2 {‘,’ Pattern2} [‘:’ Type] ‘=’ Expr */
@@ -525,28 +539,29 @@ TemplateStat {semi TemplateStat} ‘}’ */
   lazy val typeDef = id ~ (typeParamClause?) ~ (`=` -~ typeSpec)
 
   /** TmplDef ::= [case] class ClassDef
-| [case] object ObjectDef
-| trait TraitDef */
+   *     | [case] object ObjectDef
+   *     | trait TraitDef 
+   */
   lazy val tmplDef = (
-      (`case`?) ~ `class` ~ classDef
-      | (`case`?) ~ `object` ~ objectDef
-      | `trait` ~ traitDef)
+      //(`case`?) ~ `class` ~ classDef
+      //| (`case`?) ~ `object` ~ objectDef
+      //| 
+        `trait` -~ traitDef)
 
-  /** ClassDef ::= id [TypeParamClause] {Annotation} [AccessModifier]
-ClassParamClauses [requires AnnotType] ClassTemplateOpt */
+  /** ClassDef ::= id [TypeParamClause] {Annotation} [AccessModifier] ClassParamClauses [requires AnnotType] ClassTemplateOpt */
   lazy val classDef = (id 
       ~ (typeParamClause?) 
       ~ (annotation*) 
       ~ (accessModifier?)
       ~ classParamClauses
-      ~ (`requires` ~ annotType ?)
+      //~ (`requires` ~ annotType ?)
       ~ classTemplateOpt)
 
   /** TraitDef ::= id [TypeParamClause] [requires AnnotType] TraitTemplateOpt */
   lazy val traitDef = (id 
       ~ (typeParamClause?) 
-      ~ (`requires` ~ annotType ?)
-      ~ traitTemplateOpt)
+      //~ (`requires` ~ annotType ?)
+      ~ traitTemplateOpt) ^~~^ TraitDefinition
 
   /** ObjectDef ::= id ClassTemplateOpt */
   lazy val objectDef = id ~ classTemplateOpt
@@ -555,39 +570,30 @@ ClassParamClauses [requires AnnotType] ClassTemplateOpt */
   lazy val classTemplateOpt = `extends` ~ classTemplate | ((`extends`?) ~ templateBody ?)
 
   /** TraitTemplateOpt ::= extends TraitTemplate | [[extends] TemplateBody] */
-  lazy val traitTemplateOpt = `extends` ~ traitTemplate | ((`extends`?) ~ templateBody ?)
+  lazy val traitTemplateOpt = (`extends` -~ traitTemplate
+      | ((`extends`?) -~ templateBody ?) ^^ (TraitTemplate(None, Nil, _)))
 
   /** ClassTemplate ::= [EarlyDefs] ClassParents [TemplateBody] */
-  lazy val classTemplate = (earlyDefs?) ~ classParents ~ (templateBody?)
+  lazy val classTemplate = (earlyDefs?) ~ annotType ~ (argumentExprs*) ~ (`with` -~ annotType *) ~ (templateBody?)
 
   /** TraitTemplate ::= [EarlyDefs] TraitParents [TemplateBody] */
-  lazy val traitTemplate = (earlyDefs?) ~ traitParents ~ (templateBody?)
+  lazy val traitTemplate = (earlyDefs?) ~ traitParents ~ (templateBody?)  ^~~^ TraitTemplate
 
   /** ClassParents ::= Constr {with AnnotType} */
-  lazy val classParents = constr ~ (`with` ~ annotType *)
+  //lazy val classParents = constr ~ (`with` -~ annotType *)
 
   /** TraitParents ::= AnnotType {with AnnotType} */
-  lazy val traitParents = annotType ~ (`with` ~ annotType *)
+  lazy val traitParents = annotType ~++ (`with` -~ annotType *)
 
   /** Constr ::= AnnotType {ArgumentExprs} */
-  lazy val constr = annotType ~ (argumentExprs)
+  lazy val constr = annotType ~ (argumentExprs*)
 
   /** EarlyDefs ::= ‘{’ [EarlyDef {semi EarlyDef}] ‘}’ with */
-  lazy val earlyDefs = curly(earlyDef ~+~ semi ?)
+  lazy val earlyDefs = curly(earlyDef ~+~ semi | success(Nil)) ~- `with`
 
   /** EarlyDef ::= Annotations Modifiers PatDef */
     // NB 'Annotations' and 'Modifiers' not defined in SLS 2.6.0 Syntax Summary
-  lazy val earlyDef = (annotation*) ~ (modifier*) ~ patDef
-
-  /** ConstrExpr ::= SelfInvocation
-| ConstrBlock */
-  lazy val constrExpr = selfInvocation | constrBlock
-
-  /** ConstrBlock ::= ‘{’ SelfInvocation {semi BlockStat} ‘}’ */
-  lazy val constrBlock = curly(selfInvocation ~ (semi ~ blockStat *))
-
-  /** SelfInvocation ::= this ArgumentExprs {ArgumentExprs} */
-  lazy val selfInvocation = `this` ~ (argumentExprs+)
+  lazy val earlyDef = (annotation*) ~ (modifier*) ~ (`val` -~ patDef ^~~^ ValPatternDefinition) ^~~^ AnnotatedDefinition
 
   /** TopStatSeq ::= TopStat {semi TopStat} */
   lazy val topStatSeq = topStat ~+~ semi
