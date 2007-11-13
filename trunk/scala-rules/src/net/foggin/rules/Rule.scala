@@ -46,22 +46,6 @@ class Rule[S, +A](f : S => Result[A, S]) extends (S => Result[A, S])
   
   def ^^^[B](b : B) = map { any => b }
  
-  /** ^~^(f) is equivalent to ^^ { case b1 ~ b2 => f(b1, b2) } 
-   */
-  def ^~^[B1, B2, B >: A <% B1 ~ B2, C](f : (B1, B2) => C) = map { a =>
-    (a : B1 ~ B2) match { case b1 ~ b2 => f(b1, b2) } 
-  }
-  
-   /** ^~^~^(f) is equivalent to ^^ { case b1 ~ b2 ~ b3 => f(b1, b2, b3) } 
-    */
-  def ^~^~^[B1, B2, B3, B >: A <% B1 ~ B2 ~ B3, C](f : (B1, B2, B3) => C) = map { a =>
-    (a : B1 ~ B2 ~ B3) match { case b1 ~ b2 ~ b3 => f(b1, b2, b3) } 
-  }
-  
-  //def seq2[B, C, D](f : (B, C) => D)(ab : B ~ C) : D = ab match { case a ~ b => f(a, b) }
-  //def seq3[A, B, C, D](f : (A, B, C) => D)(abc : A ~ B ~ C) : D = abc match { case a ~ b ~ c => f(a, b, c) }
-
-  
   def >>[B](f : A => Rule[S, B]) = flatMap(f)
   
   def ~[B](next : => Rule[S, B]) = for (a <- this; b <- next) yield new ~(a, b)
@@ -106,4 +90,36 @@ class Rule[S, +A](f : S => Result[A, S]) extends (S => Result[A, S])
     
   def *~-(end : => Rule[S, Any]) = (this - end *) ~- end
   def +~-(end : => Rule[S, Any]) = (this - end +) ~- end
+
+  /** ^~^(f) is equivalent to ^^ { case b1 ~ b2 => f(b1, b2) } 
+   */
+  def ^~^[B1, B2, B >: A <% B1 ~ B2, C](f : (B1, B2) => C) = map { a =>
+    (a : B1 ~ B2) match { case b1 ~ b2 => f(b1, b2) } 
+  }
+  
+   /** ^~~^(f) is equivalent to ^^ { case b1 ~ b2 ~ b3 => f(b1, b2, b3) } 
+    */
+  def ^~~^[B1, B2, B3, B >: A <% B1 ~ B2 ~ B3, C](f : (B1, B2, B3) => C) = map { a =>
+    (a : B1 ~ B2 ~ B3) match { case b1 ~ b2 ~ b3 => f(b1, b2, b3) } 
+  }
+  
+  /** ^~~~^(f) is equivalent to ^^ { case b1 ~ b2 ~ b3 ~ b4 => f(b1, b2, b3, b4) } 
+   */
+     def ^~~~^[B1, B2, B3, B4, B >: A <% B1 ~ B2 ~ B3 ~ B4, C](f : (B1, B2, B3, B4) => C) = map { a =>
+     (a : B1 ~ B2 ~ B3 ~ B4) match { case b1 ~ b2 ~ b3 ~ b4 => f(b1, b2, b3, b4) } 
+   }
+   
+  /** ^~~~~^(f) is equivalent to ^^ { case b1 ~ b2 ~ b3 ~ b4 ~ b5 => f(b1, b2, b3, b4, b5) } 
+   */
+  def ^~~~~^[B1, B2, B3, B4, B5, B >: A <% B1 ~ B2 ~ B3 ~ B4 ~ B5, C](f : (B1, B2, B3, B4, B5) => C) = map { a =>
+    (a : B1 ~ B2 ~ B3 ~ B4 ~ B5) match { case b1 ~ b2 ~ b3 ~ b4 ~ b5 => f(b1, b2, b3, b4, b5) } 
+  }
+    
+   /** ^~~~~~^(f) is equivalent to ^^ { case b1 ~ b2 ~ b3 ~ b4 ~ b5 ~ b6 => f(b1, b2, b3, b4, b5, b6) } 
+    */
+   def ^~~~~~^[B1, B2, B3, B4, B5, B6, B >: A <% B1 ~ B2 ~ B3 ~ B4 ~ B5 ~ B6, C](f : (B1, B2, B3, B4, B5, B6) => C) = map { a =>
+     (a : B1 ~ B2 ~ B3 ~ B4 ~ B5 ~ B6) match { case b1 ~ b2 ~ b3 ~ b4 ~ b5 ~ b6 => f(b1, b2, b3, b4, b5, b6) } 
+   }
+     
+
 }

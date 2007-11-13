@@ -26,7 +26,7 @@ case class WhileExpression(cond : Expression, expr : Expression) extends Express
 case class DoExpression(expr : Expression, cond : Expression) extends Expression
 
 case class ForComprehension(enumerators : List[Enumerator], generator : Boolean, expr : Expression) extends Expression
-
+case class MatchExpression(expr : Expression, caseClauses : CaseClauses) extends Expression
 case class TryCatchFinally(block : Block, catchClause : Option[CaseClauses], finallyClause : Option[Expression]) extends Expression
 
 case class Throw(expr : Expression) extends Expression
@@ -45,6 +45,13 @@ trait Enumerator
 case class Generator(pattern : Expression, expr : Expression, guard : Option[Expression]) extends Enumerator
 case class Guard(guard : Expression) extends Enumerator
 case class ValEnumerator(pattern : Expression, expr : Expression) extends Enumerator
+
+case class Binding(id  : String, typeSpec : Option[Type])
+case class FunctionExpression(bindings : List[Binding], expr : Expression) extends Expression
+
+case class TypedExpression(expr : Expression, typeSpec : Type) extends Expression
+case class AnnotatedExpression(expr : Expression, annotations : List[Annotation]) extends Expression
+case class VarArgExpression(expr : Expression) extends Expression
 
 
 case class VariablePattern(id : String) extends Expression
@@ -86,7 +93,7 @@ case class FunctionDeclaration(id : String,
     returnType : Option[Type]) extends Declaration
     
 case class TypeDeclaration(id : String, 
-    typeParameters : List[VariantTypeParameter], 
+    typeParameters : Option[List[VariantTypeParameter]], 
     lowerBound : Option[Type], 
     upperBound : Option[Type]) extends Declaration
 
@@ -103,3 +110,49 @@ case class Parameter(id : String, byName : Boolean, typeSpec : Option[Type], var
 case class ImportStatement(imports : List[Import]) extends Statement
 case class Import(path : List[PathElement], selectors : List[ImportSelector])
 case class ImportSelector(id : String, as : Option[String])
+
+sealed abstract class Modifier
+sealed abstract class LocalModifier
+sealed abstract class AccessModifier
+
+case object Override extends Modifier
+case object Abstract extends LocalModifier
+case object Final extends LocalModifier
+case object Sealed extends LocalModifier
+case object Implicit extends LocalModifier
+case object Lazy extends LocalModifier
+
+case class Private(qualifier : Option[PathElement]) extends AccessModifier
+case class Protected(qualifier : Option[PathElement]) extends AccessModifier
+
+trait Definition extends Statement
+
+case class ValPatternDefinition(patterns : List[Expression], typeSpec : Option[Type], expr : Expression) extends Definition
+case class VarPatternDefinition(patterns : List[Expression], typeSpec : Option[Type], expr : Expression) extends Definition
+case class VarDefaultDefinition(ids : List[String], typeSpec : Type) extends Definition
+
+case class FunctionDefinition(id : String, 
+    typeParamClause : Option[List[TypeParameter]], 
+    paramClauses : List[List[Parameter]], 
+    implicitParamClause : Option[List[Parameter]], 
+    returnType : Option[Type],
+    expr : Expression) extends Definition
+    
+case class ProcedureDefinition(id : String, 
+    typeParamClause : Option[List[TypeParameter]], 
+    paramClauses : List[List[Parameter]], 
+    implicitParamClause : Option[List[Parameter]], 
+    expr : Expression) extends Definition
+
+case class ConstructorDefinition(
+    paramClauses : List[List[Parameter]], 
+    implicitParamClause : Option[List[Parameter]], 
+    expr : Expression) extends Definition
+    
+case class TypeDefinition(id : String, 
+    typeParameters : Option[List[VariantTypeParameter]], 
+    typeSpec : Type) extends Definition
+
+    
+    
+    
