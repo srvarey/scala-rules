@@ -333,8 +333,7 @@ abstract class ScalaParser extends ScalaScanner {
   // NB XmlPattern is not in the syntax summary of SLS 2.6.0
   val xmlPattern = failure
 
-  /** Patterns ::= Pattern [‘,’ Patterns]
-   *     | ‘_’ * */
+  /** Patterns ::= Pattern [‘,’ Patterns] | ‘_’ ‘*’  */
   lazy val patterns = pattern ~+~ comma | success(Nil)
 
   /** TypeParamClause ::= ‘[’ VariantTypeParam {‘,’ VariantTypeParam} ‘]’ */
@@ -348,9 +347,7 @@ abstract class ScalaParser extends ScalaScanner {
       | success(Invariant))
   
   /** VariantTypeParam ::= [‘+’ | ‘-’] TypeParam */
-  lazy val variantTypeParam = variance ~ typeParam ^^ { 
-      case v ~ TypeParameter(id, lower, upper, view) => VariantTypeParameter(id, lower, upper, view, v) }
-      
+  lazy val variantTypeParam = variance ~ typeParam ^~^ VariantTypeParameter
 
   /** TypeParam ::= id [>: Type] [<: Type] [<% Type] */
   lazy val typeParam = id ~ (`>:` -~ typeSpec ?) ~ (`<:` -~ typeSpec ?) ~ (`<%` -~ typeSpec ?) ^~~~^ TypeParameter
@@ -365,16 +362,10 @@ abstract class ScalaParser extends ScalaScanner {
   lazy val params = param ~+~ comma
 
   /** Param ::= {Annotation} id [‘:’ ParamType] */
-  lazy val param = (annotation*) ~ id ~ (`:` -~ paramType ?) ^^ { 
-    case annotations ~ id ~ None => Parameter(id, false, None, false, annotations)
-    case annotations ~ id ~ Some((byName, typeSpec, varArgs)) => Parameter(id, byName, Some(typeSpec), varArgs, annotations)
-  }
+  lazy val param = (annotation*) ~ id ~ (paramType?) ^~~^ Parameter
 
   /** ParamType ::= Type | ‘=>’ Type | Type ‘*’ */
-  lazy val paramType : Rule[(Boolean, Type, Boolean)] = (
-      `=>` -~ typeSpec ^^ { t => (true, t, false) }
-      | typeSpec ~- `*` ^^ { t => (false, t, true) }
-      | typeSpec ^^ { t => (false, t, false) })
+  lazy val paramType = `:` -~ (`=>`-?) ~ typeSpec ~ (`*`-?) ^~~^ ParameterType
 
   /** ClassParamClauses ::= {ClassParamClause} [[nl] ‘(’ implicit ClassParams ‘)’] */
   lazy val classParamClauses = (classParamClause*) ~ ((nl?) ~ round(`implicit` ~ classParams) ?)
@@ -386,7 +377,10 @@ abstract class ScalaParser extends ScalaScanner {
   lazy val classParams = classParam ~+~ comma
 
   /** ClassParam ::= {Annotation} [{Modifier} (‘val’ | ‘var’)] id [‘:’ ParamType] */
-  lazy val classParam = (annotation*) ~ ((modifier*) ~ (`val` | `var`) ?) ~ id ~ (`:` ~ paramType ?)
+  lazy val classParam = (annotation*) ~ (classParamModifiers?) ~ id ~ (paramType ?) ^~~~^ ClassParameter
+
+  lazy val classParamModifiers = ((modifier*) ~- `val` ^^ ValParameterModifiers 
+      | (modifier*) ~- `var` ^^ VarParameterModifiers)
 
   /** Bindings ::= ‘(’ Binding {‘,’ Binding ‘)’ */
   lazy val bindings = round(binding ~+~ comma)
@@ -567,14 +561,19 @@ abstract class ScalaParser extends ScalaScanner {
   lazy val objectDef = id ~ classTemplateOpt
 
   /** ClassTemplateOpt ::= extends ClassTemplate | [[extends] TemplateBody] */
-  lazy val classTemplateOpt = `extends` ~ classTemplate | ((`extends`?) ~ templateBody ?)
+  lazy val classTemplateOpt = (`extends` ~ classTemplate 
+      | ((`extends`?) -~ templateBody ?) ^^ (ClassTemplate(None, None, Nil, Nil, _)))
 
   /** TraitTemplateOpt ::= extends TraitTemplate | [[extends] TemplateBody] */
   lazy val traitTemplateOpt = (`extends` -~ traitTemplate
       | ((`extends`?) -~ templateBody ?) ^^ (TraitTemplate(None, Nil, _)))
 
   /** ClassTemplate ::= [EarlyDefs] ClassParents [TemplateBody] */
-  lazy val classTemplate = (earlyDefs?) ~ annotType ~ (argumentExprs*) ~ (`with` -~ annotType *) ~ (templateBody?)
+  lazy val classTemplate = ((earlyDefs?) 
+      ~ (annotType ^^ Some[Type]) 
+      ~ (argumentExprs*) 
+      ~ (`with` -~ annotType *) 
+      ~ (templateBody?)) ^~~~~^ ClassTemplate
 
   /** TraitTemplate ::= [EarlyDefs] TraitParents [TemplateBody] */
   lazy val traitTemplate = (earlyDefs?) ~ traitParents ~ (templateBody?)  ^~~^ TraitTemplate

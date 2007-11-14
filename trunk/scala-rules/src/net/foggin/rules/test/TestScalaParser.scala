@@ -38,17 +38,17 @@ checkRule(typeSpec)(
              TypeParameter("B",None,None,None), 
              TypeParameter("C",None,None,None))),
          List(List(
-             Parameter("b",true,Some(TypeDesignator(List(),"B")),false,List()), 
-             Parameter("c",false,Some(TypeDesignator(List(),"C")),true,List()))),
+             Parameter(List(), "b", Some(ParameterType(true, TypeDesignator(List(),"B"), false))), 
+             Parameter(List(), "c", Some(ParameterType(false, TypeDesignator(List(),"C"), true))))), 
          Some(List(
-             Parameter("d",false,Some(TypeDesignator(List(),"D")),false,List()))),
+             Parameter(List(), "d", Some(ParameterType(false, TypeDesignator(List(),"D"), false))))),
          Some(TypeDesignator(List(),"A"))),
          
      "type A[+B <: C, -D >: E, F <% G] >: H <: I" -> TypeDeclaration("A", 
          Some(List(
-             VariantTypeParameter("B", None, Some(TypeDesignator(List(), "C")), None, Covariant), 
-             VariantTypeParameter("D", Some(TypeDesignator(List(), "E")), None,None,Contravariant), 
-             VariantTypeParameter("F", None, None, Some(TypeDesignator(List(), "G")), Invariant))),
+             VariantTypeParameter(Covariant, TypeParameter("B", None, Some(TypeDesignator(List(), "C")), None)), 
+             VariantTypeParameter(Contravariant, TypeParameter("D", Some(TypeDesignator(List(), "E")), None, None)), 
+             VariantTypeParameter(Invariant, TypeParameter("F", None, None, Some(TypeDesignator(List(), "G")))))), 
          Some(TypeDesignator(List(), "H")),
          Some(TypeDesignator(List(), "I")))
      )
