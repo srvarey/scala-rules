@@ -27,8 +27,8 @@ case class StyleToken(val start : Int, val end : Int, val attribute : TextAttrib
   }
 }
 
-class PluginScanner extends ScalaScanner with IncrementalScanner {
-  private val colours = new scala.collection.mutable.HashMap[RGB, Color]
+class PluginScanner extends scala.ScalaScanner with IncrementalScanner {
+  private val colours = new _root_.scala.collection.mutable.HashMap[RGB, Color]
 
   def colour(rgb: RGB) = colours.getOrElseUpdate(rgb, new Color(Display.getCurrent(), rgb))
   def dispose() = for (colour <- colours.values) colour.dispose
