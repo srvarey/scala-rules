@@ -10,6 +10,7 @@ case class Super(classQualifier : Option[String]) extends PathElement with Expre
 case class Name(id : String) extends PathElement with Expression
 
 case object Underscore extends Expression
+//case object UnderscoreRepeated extends Expression
 case class Literal[T](value : T) extends Expression
 case class TupleExpression(exprs : List[Expression]) extends Expression
 case class DotExpression(expr1 : Expression, expr2 : PathElement) extends Expression
@@ -98,14 +99,30 @@ case class TypeDeclaration(id : String,
     upperBound : Option[Type]) extends Declaration
 
 case class TypeParameter(id : String, lowerBound : Option[Type], upperBound : Option[Type], viewBound : Option[Type])
-case class VariantTypeParameter(id : String, lowerBound : Option[Type], upperBound : Option[Type], viewBound : Option[Type], variance : Variance)
+case class VariantTypeParameter(variance : Variance, typeParam : TypeParameter)
 
 sealed abstract class Variance
 case object Invariant extends Variance
 case object Covariant extends Variance
 case object Contravariant extends Variance
 
-case class Parameter(id : String, byName : Boolean, typeSpec : Option[Type], varArgs : Boolean, annotations : List[Annotation])
+case class Parameter(
+    annotations : List[Annotation], 
+    id : String, 
+    paramType : Option[ParameterType])
+
+case class ClassParameter(
+    annotations : List[Annotation], 
+    modifiers : Option[ClassParameterModifiers], 
+    id : String, 
+    paramType : Option[ParameterType])
+
+case class ParameterType(byName : Boolean, typeSpec : Type, repeated : Boolean)
+
+trait ClassParameterModifiers
+case class ValParameterModifiers(modifiers : List[Modifier]) extends ClassParameterModifiers
+case class VarParameterModifiers(modifiers : List[Modifier]) extends ClassParameterModifiers
+
 
 case class ImportStatement(imports : List[Import]) extends Statement
 case class Import(path : List[PathElement], selectors : List[ImportSelector])
@@ -159,7 +176,17 @@ case class TraitDefinition(id : String,
     typeParameters : Option[List[VariantTypeParameter]], 
     traitTemplate : TraitTemplate) extends Definition
     
-case class TraitTemplate(earlyDefs : Option[List[AnnotatedDefinition]], parents : List[Type], templateBody : Option[TemplateBody])
+case class ClassTemplate(
+    earlyDefs : Option[List[AnnotatedDefinition]], 
+    parent : Option[Type], 
+    arguments : List[List[Expression]], 
+    otherParents : List[Type], 
+    templateBody : Option[TemplateBody])
+    
+case class TraitTemplate(
+    earlyDefs : Option[List[AnnotatedDefinition]], 
+    parents : List[Type], 
+    templateBody : Option[TemplateBody])
     
 case class TemplateBody(alias : Option[String], selfType : Option[Type], statements : List[Statement])
 
