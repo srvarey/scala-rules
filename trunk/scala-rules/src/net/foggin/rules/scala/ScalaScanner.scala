@@ -115,16 +115,13 @@ abstract class ScalaScanner extends Scanner {
   val octalEscape = '\\' -~ octalDigit >> octal >> octal ^^ { _.asInstanceOf[Char] }
  
   val charEscapeSeq = '\\' -~ ( choice("\"\'\\")
-      | 'b' ^^^ '\b' | 't' ^^^ '\t' | 'n' ^^^ '\n'
-      | 'f' ^^^ '\f' | 'r' ^^^ '\r') 
+      | 'b' -^ '\b' | 't' -^ '\t' | 'n' -^ '\n'
+      | 'f' -^ '\f' | 'r' -^ '\r') 
 
   val anyChar = unicodeEscape | octalEscape | item
   val printableChar = !choice("\b\t\n\f\r") -~ anyChar
   
   def unicode(category : Int) = anyChar filter (getType(_) == category)
-  
-  //val delimiter = choice("`'\".;,")
-  //val separator = parentheses | delimiter | whitespace
   
   val letter = choice("$_") | (anyChar filter isLetter)
   val digit = anyChar filter isDigit
@@ -141,12 +138,12 @@ abstract class ScalaScanner extends Scanner {
   val quoteid = token('`' -~ (printableChar +~- '`')) ^^ toString
   val id = plainid | quoteid
 
-  lazy val idRest : Rule[List[Char]] = ('_' ~++ (opChar+)) ~- !idChar | !idChar ^^^ Nil | idChar ~++ idRest
+  lazy val idRest : Rule[List[Char]] = ('_' ~++ (opChar+)) ~- !idChar | !idChar -^ Nil | idChar ~++ idRest
 
   val nonZero = decimalDigit filter (_ > 0)
   val hexNumeral = "0x" -~ hexDigit >> hexN
   val octalNumeral = '0' -~ octalDigit >> octalN
-  val decimalNumeral = nonZero >> decimalN | '0' ^^^ 0
+  val decimalNumeral = nonZero >> decimalN | '0' -^ 0
   val integerLiteral = (hexNumeral | octalNumeral | decimalNumeral) ~- (choice("Ll")?) ~- !idChar
   
   val intPart = decimalNumeral ^^ (_ toString) | ""
@@ -173,9 +170,9 @@ abstract class ScalaScanner extends Scanner {
   val stringLiteral = ('\"' -~ charElement *~- '\"' | "\"\"\"" -~ anyChar *~- "\"\"\"") ^^ toString
   val symbolLiteral = '\'' -~ plainid ^^ Symbol
   
-  val space = (choice(" \t")*) ^^^ " "
-  val nl = (space ~ newline ~ space) ^^^ "{nl}"
-  val semi = space ~ (";" | nl) ~ (nl*) ~ space ^^^ ";"
+  val space = (choice(" \t")*) -^ " "
+  val nl = (space ~ newline ~ space) -^ "{nl}"
+  val semi = space ~ (";" | nl) ~ (nl*) ~ space -^ ";"
    
   // note multi-line comments can nest
   lazy val multiLineComment : Rule[String] = ("/*" -~ (multiLineComment | anyChar) *~- "*/") ^^ toString
