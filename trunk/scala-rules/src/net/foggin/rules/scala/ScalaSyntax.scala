@@ -1,4 +1,4 @@
-package net.foggin.rules;
+package net.foggin.rules.scala;
 
 trait Statement
 trait Expression extends Statement

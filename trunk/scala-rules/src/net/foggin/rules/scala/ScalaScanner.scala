@@ -1,4 +1,4 @@
-package net.foggin.rules
+package net.foggin.rules.scala
 
 import Character._
 
@@ -11,8 +11,8 @@ abstract class ScalaScanner extends Scanner {
   def token[T](rule : Rule[T]) = (choice(" \t") | comment *) -~ rule
 
   // reserved keywords and operators
-  val keywords = scala.collection.mutable.Map.empty[String, Rule[String]]
-  val reservedOps = scala.collection.mutable.Map.empty[String, Rule[String]]
+  val keywords = _root_.scala.collection.mutable.Map.empty[String, Rule[String]]
+  val reservedOps = _root_.scala.collection.mutable.Map.empty[String, Rule[String]]
       
   private def keyword(name : String) = keywords.getOrElseUpdate(name, token(name ~- !idChar))
   private def reservedOp(name : String) = reservedOps.getOrElseUpdate(name, opToken(name))
@@ -195,131 +195,3 @@ abstract class ScalaScanner extends Scanner {
 }
 
 
-trait TestScanner extends Scanner with Application {
-  type Context = ArrayInput[Char]
-  
-  def check[A](input : String, actual : Result[A], expected : Result[A]) {
-    (expected, actual) match {
-      case (Success(ea, es), Success(aa, as)) if ea == aa && es.toString == as.toString => ()
-      case (e, a) if e == a => ()
-      case _ => error ("Input: " + input + 
-        "\nExpected result: " + expected + 
-        "\nActual result: " + actual)
-    }
-  }
-  
-  def checkFailure[A](rule : Rule[A])(input : String *) {
-    for (i <- input) check(i, rule(i), Failure[Context])
-  }
-  
-  def checkRule[A](rule : Rule[A])(expect : (String, Result[A]) *) {
-    for ((input, result) <- expect) check(input, rule(input), result)
-  }
-  
-  implicit def anyToSuccess[A](a : A) : Result[A] = Success(a, "")
-  
-  implicit def tripleToSuccess[A](triple : ((String, A), String)) : (String, Result[A]) = 
-    triple match { case ((input, a), rest) => input -> Success(a, rest) }
-}
-
-object TestScalaScanner extends ScalaScanner with TestScanner {
-  
-  checkRule(unicodeEscape)("\\u0030" -> '0', "\\u21D2" -> '\u21D2')
-  checkRule(octalEscape)("\\061" -> '1')
-  checkRule(anyChar)("\\u0030" -> '0', "\\u21D2" -> '\u21D2')
-  checkRule(opChar)("\\u21D2" -> '\u21D2')
-  
-  checkFailure(integerLiteral)("l", "L", "0x")
-  
-  checkRule(integerLiteral) (
-      "0l" -> 0,
-      "12 " -> 12 -> " ",
-      "012" -> 10,
-      "0x12" -> 18)
-      
-  checkFailure(opChar)(".", ";", "(", "[", "}")
-  
-  checkRule(opChar) (
-      "+" -> '+',
-      "-" -> '-',
-      "*" -> '*',
-      "/" -> '/')
-   
-      
-  // check reserved words aren't ids
-  checkFailure(id)(keywords.keys.toList : _*)
-  checkFailure(id)(reservedOps.keys.toList : _*)
-  
-  //checkRule(keyword)(keywords.keys.toList.map[String] { s => (s, s) } : _*)
-  
-  checkRule(keyword)(
-      "abstract" -> "abstract",
-      "_" -> "_")
-  
-  checkRule(quoteid)("`yield`" -> "yield")
-  
-  checkRule(id)(
-      "`yield`" -> "yield", 
-      "yield1" -> "yield1", 
-      "yield_+" -> "yield_+",
-      "`\\u21D2`" -> "\u21D2")
-
-  checkRule(floatLiteral)(
-      "1f" -> "1", 
-      "1.0F" -> "1.0", 
-      "1.e2F" -> "1.e2",
-      ".12E3f" -> ".12E3")
-
-  checkRule(doubleLiteral)(
-      "1D" -> "1", 
-      "1.0" -> "1.0", 
-      "1e2" -> "1e2",
-      ".12E3D" -> ".12E3")
-
-  println("Scanner tests passed")
-}
-
-object TestIncrementalScalaScanner extends ScalaScanner with IncrementalScanner with Application {
-  val document = new EditableDocument[Char]
-  val input = document.first
-
-  val tokens = view(memo("token", nl | semi | space ~- comment | separator |  literal | keyword | reservedOp | id)) _
-
-  val line = memo("line", newline ^^^ "" | (!newline -~ item +) ~- (newline?) ^^ toString)
-  val lines = view(line) _
-
-  //var input = new EditableInput[Char]
-
-  def printTokens() {
-    println; println("Tokens: ")
-    println(tokens(input).mkString(", "))
-  }
-
-  def printLines() {
-    println; println("Lines: ")
-    println(lines(input).mkString("\n"))
-  }
-
-  // set up initial text
-  document.edit(0, 0, """
-    package a.b.c
-    
-    /** my comment */
-    object Hello extends Application {
-      println("Hello World!")
-    }
-    """)
-
-  printTokens()
-  printLines()
-
- // insert something
- document.edit(19, 0, """
-   class Dummy {
-     val answer = 42
-   }
-   """)
-
-  printTokens()
-  printLines()
-} 
