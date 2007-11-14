@@ -19,16 +19,16 @@ abstract class ScalaParser extends ScalaScanner {
   val ids = id ~+~ comma
   
   /** Note left-recursive definition.
-  *
-  * Path ::= StableId 
-  *    | [id ‘.’] this 
-  *
-  * StableId ::= id
-  *    | Path ‘.’ id
-  *    | [id ’.’] super [ClassQualifier] ‘.’ id
-  *
-  * ClassQualifier ::= ‘[’ id ‘]’
-  */
+   *
+   * Path ::= StableId 
+   *    | [id ‘.’] this 
+   *
+   * StableId ::= id
+   *    | Path ‘.’ id
+   *    | [id ’.’] super [ClassQualifier] ‘.’ id
+   *
+   * ClassQualifier ::= ‘[’ id ‘]’
+   */
   val pathElement : Rule[PathElement] = (id ^^ Name
       | `super` -~ (square(id) ?) ^^ Super
       | `this` -^ This)
@@ -53,14 +53,11 @@ abstract class ScalaParser extends ScalaScanner {
       | (compoundType >> infixType) ~ (existentialClause?) ^^ { 
         case a ~ b => a })
     
-  /** ExistentialClause ::= forSome ‘{’ ExistentialDcl {semi ExistentialDcl}} ‘}’ */
-    // note typo above (double }})
+  /** ExistentialClause ::= forSome ‘{’ ExistentialDcl {semi ExistentialDcl} ‘}’ */
   lazy val existentialClause : Rule[Any] = failure //`forSome` ~  curly(existentialDcl ~+~ semi)
       
   /** ExistentialDcl ::= type TypeDcl | val ValDcl */
-  lazy val existentialDcl = (
-      `type` ~ typeDcl 
-      |`val` ~ valDcl)
+  lazy val existentialDcl = `type` ~ typeDcl |`val` ~ valDcl
         
   /** InfixType ::= CompoundType {id [nl] CompoundType} */
   lazy val infixType : Rule[Type] = compoundType >> infixType
@@ -72,7 +69,7 @@ abstract class ScalaParser extends ScalaScanner {
    *    | Refinement */
   lazy val compoundType : Rule[Type] = (
       annotType ~++ (`with` -~ annotType *) ~ refinement ^^ { case as ~ r => CompoundType(as, Some(r)) }
-      | annotType ~++ (`with` -~ annotType +) ~ (refinement ?) ^^ { case as ~ optR => CompoundType(as, optR) }
+      | annotType ~++ (`with` -~ annotType +) ~ (refinement?) ^~^ CompoundType
       | refinement ^^ { r => CompoundType(Nil, Some(r)) }
       | annotType)
       
@@ -368,10 +365,10 @@ abstract class ScalaParser extends ScalaScanner {
   lazy val paramType = `:` -~ (`=>`-?) ~ typeSpec ~ (`*`-?) ^~~^ ParameterType
 
   /** ClassParamClauses ::= {ClassParamClause} [[nl] ‘(’ implicit ClassParams ‘)’] */
-  lazy val classParamClauses = (classParamClause*) ~ ((nl?) ~ round(`implicit` ~ classParams) ?)
+  lazy val classParamClauses = (classParamClause*) ~ ((nl?) -~ round(`implicit` -~ classParams) ?) ^~^ ClassParamClauses
 
   /** ClassParamClause ::= [nl] ‘(’ [ClassParams] ’)’ */
-  lazy val classParamClause = (nl?) ~ round(classParams?)
+  lazy val classParamClause = (nl?) -~ round(classParams | success(Nil))
 
   /** ClassParams ::= ClassParam {‘’ ClassParam} */
   lazy val classParams = classParam ~+~ comma
@@ -536,11 +533,11 @@ abstract class ScalaParser extends ScalaScanner {
    *     | [case] object ObjectDef
    *     | trait TraitDef 
    */
-  lazy val tmplDef = (
-      //(`case`?) ~ `class` ~ classDef
-      //| (`case`?) ~ `object` ~ objectDef
-      //| 
-        `trait` -~ traitDef)
+  lazy val tmplDef = (`class` -~ classDef
+      | `case` -~ `class` -~ classDef ^^ CaseClassDefinition
+      | `object` -~ objectDef
+      | `case`-~ `object` -~ objectDef ^^ CaseObjectDefinition
+      | `trait` -~ traitDef)
 
   /** ClassDef ::= id [TypeParamClause] {Annotation} [AccessModifier] ClassParamClauses [requires AnnotType] ClassTemplateOpt */
   lazy val classDef = (id 
@@ -549,7 +546,7 @@ abstract class ScalaParser extends ScalaScanner {
       ~ (accessModifier?)
       ~ classParamClauses
       //~ (`requires` ~ annotType ?)
-      ~ classTemplateOpt)
+      ~ classTemplateOpt) ^~~~~~^ ClassDefinition
 
   /** TraitDef ::= id [TypeParamClause] [requires AnnotType] TraitTemplateOpt */
   lazy val traitDef = (id 
@@ -558,10 +555,10 @@ abstract class ScalaParser extends ScalaScanner {
       ~ traitTemplateOpt) ^~~^ TraitDefinition
 
   /** ObjectDef ::= id ClassTemplateOpt */
-  lazy val objectDef = id ~ classTemplateOpt
+  lazy val objectDef = id ~ classTemplateOpt ^~^ ObjectDefinition
 
   /** ClassTemplateOpt ::= extends ClassTemplate | [[extends] TemplateBody] */
-  lazy val classTemplateOpt = (`extends` ~ classTemplate 
+  lazy val classTemplateOpt = (`extends` -~ classTemplate 
       | ((`extends`?) -~ templateBody ?) ^^ (ClassTemplate(None, None, Nil, Nil, _)))
 
   /** TraitTemplateOpt ::= extends TraitTemplate | [[extends] TemplateBody] */
