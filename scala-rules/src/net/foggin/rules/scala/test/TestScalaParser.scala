@@ -1,4 +1,4 @@
-package net.foggin.rules.test
+package net.foggin.rules.scala.test
 
 object TestScalaParser extends ScalaParser with TestScanner {
 //checkRule(path)(

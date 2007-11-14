@@ -1,4 +1,4 @@
-package net.foggin.rules;
+package net.foggin.rules.scala;
 
 /** Rules based on Scala Language Specification 2.6.0 
  * (copied from Syntax Summary section)

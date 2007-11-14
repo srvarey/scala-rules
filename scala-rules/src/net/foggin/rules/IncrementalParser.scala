@@ -22,7 +22,7 @@ class EditableDocument[A] {
 
     var index : Int = 0
 
-    private val map = new scala.collection.mutable.HashMap[AnyRef, Result[Any, Element]]
+    private val map = new _root_.scala.collection.mutable.HashMap[AnyRef, Result[Any, Element]]
 
     def compare(other : Element) = index - other.index
     
