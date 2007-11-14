@@ -63,7 +63,7 @@ object TestIncrementalScalaScanner extends ScalaScanner with IncrementalScanner 
 
   val tokens = view(memo("token", nl | semi | space ~- comment | separator |  literal | keyword | reservedOp | id)) _
 
-  val line = memo("line", newline ^^^ "" | (!newline -~ item +) ~- (newline?) ^^ toString)
+  val line = memo("line", newline -^ "" | (!newline -~ item +) ~- (newline?) ^^ toString)
   val lines = view(line) _
 
   //var input = new EditableInput[Char]

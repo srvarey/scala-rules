@@ -13,7 +13,7 @@ trait Parser[A] extends Rules {
   implicit def elem(a : A) = item filter (_ == a)
 
   def readSeq[C <% Seq[A]](seq : C) : Rule[C] = if (seq isEmpty) success(seq)
-      else seq.map(elem(_)).reduceLeft[Rule[A]](_ -~ _) ^^^ seq
+      else seq.map(elem(_)).reduceLeft[Rule[A]](_ -~ _) -^ seq
 
   def choice[C <% Seq[A]](seq : C) : Rule[A] = select(seq.map(elem))
 

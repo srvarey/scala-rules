@@ -31,7 +31,7 @@ abstract class ScalaParser extends ScalaScanner {
   */
   val pathElement : Rule[PathElement] = (id ^^ Name
       | `super` -~ (square(id) ?) ^^ Super
-      | `this` ^^^ This)
+      | `this` -^ This)
     
   val path = pathElement ~+~ dot
     
@@ -219,7 +219,7 @@ abstract class ScalaParser extends ScalaScanner {
    * Note left-recursive definition above.  
    */
   lazy val simpleExpr1 : Rule[Expression] = (
-      `_` ^^^ Underscore
+      `_` -^ Underscore
       | literal 
       | pathElement
       | tupleExpr
@@ -321,7 +321,7 @@ abstract class ScalaParser extends ScalaScanner {
    *     | XmlPattern
    */
   lazy val simplePattern : Rule[Expression] = (
-      `_` ^^^ Underscore
+      `_` -^ Underscore
       | varid ~- !dot ^^ VariablePattern
       | literal
       | stableId ~ round(patterns ~- (comma?)) ^^ { case a ~ b => StableIdPattern(a, Some(b), false) }
@@ -342,8 +342,8 @@ abstract class ScalaParser extends ScalaScanner {
   /** FunTypeParamClause::= ‘[’ TypeParam {‘,’ TypeParam} ‘]’ */
   lazy val funTypeParamClause = square(typeParam ~+~ comma)
 
-  val variance = (plus ^^^ Covariant
-      | minus ^^^ Contravariant
+  val variance = (plus -^ Covariant
+      | minus -^ Contravariant
       | success(Invariant))
   
   /** VariantTypeParam ::= [‘+’ | ‘-’] TypeParam */
@@ -392,7 +392,7 @@ abstract class ScalaParser extends ScalaScanner {
    *     | AccessModifier
    *     | override 
    */
-  lazy val modifier : Rule[Modifier] = localModifier | accessModifier | `override`^^^ Override
+  lazy val modifier : Rule[Modifier] = localModifier | accessModifier | `override`-^ Override
 
   /** LocalModifier ::= abstract
    *     | final
@@ -400,18 +400,18 @@ abstract class ScalaParser extends ScalaScanner {
    *     | implicit
    *     | lazy 
    */
-  lazy val localModifier : Rule[Modifier]  = (`abstract` ^^^ Abstract
-      | `final` ^^^ Final
-      | `sealed` ^^^ Sealed
-      | `implicit` ^^^ Implicit
-      | `lazy` ^^^ Lazy)
+  lazy val localModifier : Rule[Modifier]  = (`abstract` -^ Abstract
+      | `final` -^ Final
+      | `sealed` -^ Sealed
+      | `implicit` -^ Implicit
+      | `lazy` -^ Lazy)
 
   /** AccessModifier ::= (private | protected) [AccessQualifier] */
   lazy val accessModifier : Rule[Modifier] = (`private` -~ (accessQualifier?) ^^ Private
       | `protected`-~ (accessQualifier?) ^^ Protected) 
 
   /** AccessQualifier ::= ‘[’ (id | this) ‘]’ */
-  lazy val accessQualifier = square(id ^^ Name | `this` ^^^ This)
+  lazy val accessQualifier = square(id ^^ Name | `this` -^ This)
 
   /** Annotation ::= ‘@’ AnnotationExpr [nl] */
   lazy val annotation : Rule[Annotation] = failure //`@` ~ annotationExpr ~ (nl?)
@@ -426,7 +426,7 @@ abstract class ScalaParser extends ScalaScanner {
   lazy val templateBody = (nl?) -~ curly(selfType ~ (templateStat ~+~ semi)) ^~~^ TemplateBody
 
   lazy val selfType = ((id ^^ Some[String]) ~ (`:` -~ typeSpec ?)  ~- `=>`
-      | (`this` ^^^ None) ~ (`:` -~ typeSpec ^^ Some[Type]) ~- `=>` 
+      | (`this` -^ None) ~ (`:` -~ typeSpec ^^ Some[Type]) ~- `=>` 
       | success(None) ~ success(None))
   
   /** TemplateStat ::= Import
@@ -458,7 +458,7 @@ abstract class ScalaParser extends ScalaScanner {
 
   /** ImportSelector ::= id [‘=>’ id | ‘=>’ ‘_’] */
   lazy val importSelector = id ~ (`=>` -~ (id | `_`) ?) ^~^ ImportSelector
-  lazy val wildcardImportSelector = `_` ^^^ ImportSelector("_", None)
+  lazy val wildcardImportSelector = `_` -^ ImportSelector("_", None)
 
   /** Dcl ::= val ValDcl
    *     | var VarDcl
