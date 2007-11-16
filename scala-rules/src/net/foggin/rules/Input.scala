@@ -3,6 +3,7 @@ package net.foggin.rules
 trait Input[+A, Context <: Input[A, Context]] extends Iterable[A] { self : Context =>
 
   def next : Result[A, Context]
+  def index : Int
 
   def elements = new Iterator[A] {
     private var input : Context = Input.this
@@ -29,11 +30,11 @@ class ArrayInput[A](val array : Array[A], val index : Int) extends Input[A, Arra
 }
 
 
-class IterableInput[A](iterator : Iterator[A]) extends Input[A, IterableInput[A]] {
-  def this(iterable : Iterable[A]) = this(iterable.elements)
+class IterableInput[A](iterator : Iterator[A], val index : Int) extends Input[A, IterableInput[A]] {
+  def this(iterable : Iterable[A]) = this(iterable.elements, 0)
 
   lazy val next = if (!iterator.hasNext) Failure[IterableInput[A]]
-    else Success(iterator.next, new IterableInput(iterator))
+    else Success(iterator.next, new IterableInput(iterator, index + 1))
  
   override lazy val toString = elements.mkString("\"", "", "\"")
 }
@@ -42,11 +43,12 @@ class IterableInput[A](iterator : Iterator[A]) extends Input[A, IterableInput[A]
 /** View one type of input as another based on a transformation rule */
 class View[A, B, Context <: Input[A, Context]](
     transform : Context => Result[B, Context],
-    val input : Context)
+    val input : Context,
+    val index : Int)
     extends Input[B, View[A, B, Context]] {
 
   def next = transform(input) match {
-    case Success(b, context) => Success(b, new View(transform, context))
+    case Success(b, context) => Success(b, new View(transform, context, index + 1))
     case _ => Failure[View[A, B, Context]]
   }
 }

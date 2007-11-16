@@ -212,6 +212,8 @@ case class TemplateBody(alias : Option[String], selfType : Option[Type], stateme
 case class AnnotatedDeclaration(annotations : List[Annotation], modifiers : List[Modifier], declaration : Declaration) extends Statement
 case class AnnotatedDefinition(annotations : List[Annotation], modifiers : List[Modifier], definition : Definition) extends Statement
 
-    
+case class Packaging(qualId : List[String], statements : List[Statement]) extends Statement
+
+case class CompilationUnit(qualId : Option[List[String]], statements : List[Statement]) extends Statement
     
     

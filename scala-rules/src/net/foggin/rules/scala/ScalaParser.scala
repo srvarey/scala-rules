@@ -7,10 +7,10 @@ package net.foggin.rules.scala;
  */
 abstract class ScalaParser extends ScalaScanner {
   
-  // TODO: allow {nl} within round and square
-  def round[T](rule : Rule[T]) = token('(') -~ rule ~- token(')')
-  def square[T](rule : Rule[T]) = token('[') -~ rule ~- token(']')
-  def curly[T](rule : Rule[T]) = token('{') -~ rule ~- token('}')
+  // TODO: ignore {nl} within round and square
+  def round[T](rule : Rule[T]) = openRound -~ rule ~- closeRound
+  def square[T](rule : Rule[T]) = openSquare -~ rule ~- closeSquare
+  def curly[T](rule : Rule[T]) = openCurly -~ rule ~- closeCurly
   
   /** QualId ::= id {‘.’ id} */
   val qualId = id ~+~ dot
@@ -90,6 +90,8 @@ abstract class ScalaParser extends ScalaScanner {
       path ~- dot ~- `type` ^^ SingletonType
       | stableId ^^ { list => { val Name(id) :: rest = list.reverse; TypeDesignator(rest.reverse, id) }}
       | round(types ~- (comma?)) ^^ TupleType) >> typeArgsOrProjection
+      
+  def typeSpecf(b : Boolean) = typeSpec
 
   def typeArgsOrProjection(simpleType : SimpleType) : Rule[SimpleType] = (
       parameterizedType(simpleType) >> typeArgsOrProjection
@@ -293,14 +295,14 @@ abstract class ScalaParser extends ScalaScanner {
    *     | ‘_’ ‘:’ TypePat
    *     | Pattern2 */
   lazy val pattern1 = (
-    varid ~- `:` ~ typePat ^~^ TypedVariablePattern
+    varId ~- `:` ~ typePat ^~^ TypedVariablePattern
     | `_` -~ `:`-~ typePat ^^ TypePattern
     | pattern2)
 
   /** Pattern2 ::= varid [‘@’ Pattern3]
    *     | Pattern3 */
   lazy val pattern2 = (
-      (varid ~- `@` ~ pattern3) ^~^ AtPattern
+      (varId ~- `@` ~ pattern3) ^~^ AtPattern
       | pattern3)
 
   /** Pattern3 ::= SimplePattern | SimplePattern { id [nl] SimplePattern } */
@@ -319,7 +321,7 @@ abstract class ScalaParser extends ScalaScanner {
    */
   lazy val simplePattern : Rule[Expression] = (
       `_` -^ Underscore
-      | varid ~- !dot ^^ VariablePattern
+      | varId ~- !dot ^^ VariablePattern
       | literal
       | stableId ~ round(patterns ~- (comma?)) ^^ { case a ~ b => StableIdPattern(a, Some(b), false) }
       | stableId ~ round((pattern ~- comma *) ~- `_` ~- `*`) ^^ { case a ~ b => StableIdPattern(a, Some(b), true) }
@@ -420,7 +422,7 @@ abstract class ScalaParser extends ScalaScanner {
   lazy val nameValuePair = `val` ~ id ~ prefixExpr
 
   /** TemplateBody ::= [nl] ‘{’ [id [‘:’ Type] ‘=>’] TemplateStat {semi TemplateStat} ‘}’ */
-  lazy val templateBody = (nl?) -~ curly(selfType ~ (templateStat ~+~ semi)) ^~~^ TemplateBody
+  lazy val templateBody = (nl?) -~ curly(selfType ~- (nl*) ~ (templateStat ~+~ semi)) ^~~^ TemplateBody
 
   lazy val selfType = ((id ^^ Some[String]) ~ (`:` -~ typeSpec ?)  ~- `=>`
       | (`this` -^ None) ~ (`:` -~ typeSpec ^^ Some[Type]) ~- `=>` 
@@ -592,21 +594,21 @@ abstract class ScalaParser extends ScalaScanner {
   lazy val earlyDef = (annotation*) ~ (modifier*) ~ (`val` -~ patDef ^~~^ ValPatternDefinition) ^~~^ AnnotatedDefinition
 
   /** TopStatSeq ::= TopStat {semi TopStat} */
-  lazy val topStatSeq = topStat ~+~ semi
+  lazy val topStatSeq = topStat ~+~ semi | success(Nil)
 
   /** TopStat ::= {Annotation} {Modifier} TmplDef
 | Import
 | Packaging
 | */
-  lazy val topStat : Rule[Any] = (
-      (annotation*) ~ (modifier*) ~ tmplDef
+  lazy val topStat : Rule[Statement] = (nl*) -~ (
+      (annotation*) ~ (modifier*) ~ tmplDef ^~~^ AnnotatedDefinition
       | importStat
       | packaging)
 
   /** Packaging ::= package QualId [nl] ‘{’ TopStatSeq ‘}’ */
-  lazy val packaging = `package` ~ qualId ~ (nl?) ~ curly(topStatSeq)
+  lazy val packaging = (`package` -~ qualId) ~ ((nl?) -~ curly(topStatSeq)) ^~^ Packaging
 
   /** CompilationUnit ::= [package QualId semi] TopStatSeq */
-  lazy val compilationUnit = (`package` ~ qualId ~ semi ?) ~ topStatSeq
+  lazy val compilationUnit = (nl*) -~ (`package` -~ qualId ~- semi ?) ~ topStatSeq ^~^ CompilationUnit
 
 }

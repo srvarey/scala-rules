@@ -25,16 +25,14 @@ object TestScalaScanner extends ScalaScanner with TestScanner {
    
       
   // check reserved words aren't ids
-  checkFailure(id)(keywords.keys.toList : _*)
-  checkFailure(id)(reservedOps.keys.toList : _*)
-  
-  //checkRule(keyword)(keywords.keys.toList.map[String] { s => (s, s) } : _*)
+  checkFailure(id)(reserved.toList : _*)
+  //checkFailure(id(false))(reservedOps.keys.toList : _*)
   
   checkRule(keyword)(
       "abstract" -> "abstract",
       "_" -> "_")
   
-  checkRule(quoteid)("`yield`" -> "yield")
+  checkRule(quoteId)("`yield`" -> "yield")
   
   checkRule(id)(
       "`yield`" -> "yield", 
@@ -61,7 +59,7 @@ object TestIncrementalScalaScanner extends ScalaScanner with IncrementalScanner 
   val document = new EditableDocument[Char]
   val input = document.first
 
-  val tokens = view(memo("token", nl | semi | space ~- comment | separator |  literal | keyword | reservedOp | id)) _
+  val tokens = view(memo("token", nl | semi | comment | separator |  literal | keyword | reservedOp | id)) _
 
   val line = memo("line", newline -^ "" | (!newline -~ item +) ~- (newline?) ^^ toString)
   val lines = view(line) _
