@@ -8,97 +8,21 @@ import Character._
  */
 abstract class ScalaScanner extends Scanner {
   
-  def token[T](rule : Rule[T]) = (choice(" \t") | comment *) -~ rule
+  def token[T](rule : Rule[T]) = (space | comment *) -~ rule
 
-  // reserved keywords and operators
-  val keywords = _root_.scala.collection.mutable.Map.empty[String, Rule[String]]
-  val reservedOps = _root_.scala.collection.mutable.Map.empty[String, Rule[String]]
+  val space = choice(" \t")
+  val nl = token(newline) -^ "{nl}"
+  val semi = (token(";") | nl) ~- (space | newline *)
+   
+  val reserved = _root_.scala.collection.immutable.Set(
+      "abstract", "case", "catch", "class", "def", "do", "else", "extends", "false", "final",
+      "finally", "for", "forSome", "if", "implicit", "import", "lazy", "match", "new", "null", "object",
+      "override", "package", "private", "protected", "requires", "return", "sealed", "super", "this", 
+      "throw", "trait", "try", "true", "type", "val", "var", "while", "with", "yield",
+      "_", ":", "=", "=>", "<-", "<:", "<%", ">:", "#", "@")
+  
+  def isReserved(id : String) = reserved.contains(id)
       
-  private def keyword(name : String) = keywords.getOrElseUpdate(name, token(name ~- !idChar))
-  private def reservedOp(name : String) = reservedOps.getOrElseUpdate(name, opToken(name))
-  private def opToken(op : String) = token(op ~- !opChar)
-  
-  val `abstract` = keyword("abstract")
-  val `case` = keyword("case")
-  val `catch` = keyword("catch")
-  val `class` = keyword("class")
-  val `def` = keyword("def")
-  val `do` = keyword("do")
-  val `else` = keyword("else")
-  val `extends` = keyword("extends")
-  val `false` = keyword("false")
-  val `final` = keyword("final")
-  val `finally` = keyword("finally")
-  val `for` = keyword("for")
-  val `forSome` = keyword("forSome")
-  val `if` = keyword("if")
-  val `implicit` = keyword("implicit")
-  val `import` = keyword("import")
-  val `lazy` = keyword("lazy") // NB "lazy" is missing from the list in language specification 2.6.0
-  val `match` = keyword("match")
-  val `new` = keyword("new")
-  val `null` = keyword("null")
-  val `object` = keyword("object")
-  val `override` = keyword("override")
-  val `package` = keyword("package")
-  val `private` = keyword("private")
-  val `protected` = keyword("protected")
-  val `requires` = keyword("requires")
-  val `return` = keyword("return")
-  val `sealed` = keyword("sealed")
-  val `super` = keyword("super")
-  val `this` = keyword("this")
-  val `throw` = keyword("throw")
-  val `trait` = keyword("trait")
-  val `try` = keyword("try")
-  val `true` = keyword("true")
-  val `type` = keyword("type")
-  val `val` = keyword("val")
-  val `var` = keyword("var")
-  val `while` = keyword("while")
-  val `with` = keyword("with")
-  val `yield` = keyword("yield")
-  val `_` = keyword("_")
-  
-  val `:` = reservedOp(":")
-  val `=` = reservedOp("=")
-  val `=>` = reservedOp("=>") | reservedOp("\u21D2")
-  val `<-` = reservedOp("<-")
-  val `<:` = reservedOp("<:")
-  val `<%` = reservedOp("<%")
-  val `>:` = reservedOp(">:")
-  val `#` = reservedOp("#")
-  val `@` = reservedOp("@")
-  
-  // not reserved, but have special uses:
-  val minus = opToken("-")  // variance or unary op
-  val plus = opToken("+") // variance or unary op
-  val bang = opToken("!") // unary op
-  val tilde = opToken("~") // unary op
-  val `*` = opToken("*") // repeated params
-  val `|` = opToken("|") // combining patterns
-  
-  //These can be defined but cause compile errors when used later
-  //val `+` = opToken("+")
-  //val `-` = opToken("-")
-  //val `!` = opToken("!") // unary op
-  //val `~` = opToken("~")
-
-  
-  //These can be defined but cause runtime errors when used in plugin
-  //val `,` = token(',') 
-  //val `.` = token('.')
-  //val `(` = token('(')
-  //val `)` = token(')')
-  //val `[` = token('[')
-  //val `]` = token(']')
-  //val `{` = token('{')
-  //val `}` = token('}')
-  
-  val comma = token(',')
-  val dot = token('.')
-  val separator = token(choice(",.()[]{}"))
-  
   val decimalDigit = range('0', '9') ^^ (_ - 48L)
   def decimal(n : Long) = decimalDigit ^^ (n * 10 + _)
   def decimalN(n : Long) : Rule[Long] = decimal(n) >> decimalN | success(n)
@@ -115,8 +39,7 @@ abstract class ScalaScanner extends Scanner {
   val octalEscape = '\\' -~ octalDigit >> octal >> octal ^^ { _.asInstanceOf[Char] }
  
   val charEscapeSeq = '\\' -~ ( choice("\"\'\\")
-      | 'b' -^ '\b' | 't' -^ '\t' | 'n' -^ '\n'
-      | 'f' -^ '\f' | 'r' -^ '\r') 
+      | 'b' -^ '\b' | 't' -^ '\t' | 'n' -^ '\n' | 'f' -^ '\f' | 'r' -^ '\r') 
 
   val anyChar = unicodeEscape | octalEscape | item
   val printableChar = !choice("\b\t\n\f\r") -~ anyChar
@@ -129,17 +52,91 @@ abstract class ScalaScanner extends Scanner {
   val idChar = letter | digit
   val opChar = unicode(MATH_SYMBOL) | unicode(OTHER_SYMBOL) | choice("!#%&*+-/:<=>?@\\^|~")
   
-  val keyword = select(keywords.values.toList)
-  val reservedOp = select(reservedOps.values.toList)
+  val quoteId = '`' -~ (printableChar +~- '`') ^^ toString
+  val unquotedId = ((opChar+) | letter ~++ idRest) ^^ toString
+  val plainId = unquotedId filter { id => !reserved.contains(id) }
   
-  val op = token((opChar+) ^^ toString filter (!reservedOps.contains(_)))
-  val varid = token(lower ~++ idRest ^^ toString filter (!keywords.contains(_)))
-  val plainid = op | token(letter ~++ idRest ^^ toString filter (!keywords.contains(_)))
-  val quoteid = token('`' -~ (printableChar +~- '`')) ^^ toString
-  val id = plainid | quoteid
+  val keyword = token(letter ~++ idRest) ^^ toString filter isReserved
+  val reservedOp = token(opChar+) ^^ toString filter isReserved
+  
+  val varId = token((lower&) -~ plainId)
+  val id = token(quoteId | plainId)
+  def name(id : String) = token(unquotedId filter (_ == id))
 
   lazy val idRest : Rule[List[Char]] = ('_' ~++ (opChar+)) ~- !idChar | !idChar -^ Nil | idChar ~++ idRest
 
+  val `abstract` = name("abstract")
+  val `case` = name("case")
+  val `catch` = name("catch")
+  val `class` = name("class")
+  val `def` = name("def")
+  val `do` = name("do")
+  val `else` = name("else")
+  val `extends` = name("extends")
+  val `false` = name("false") -^ Literal(false)
+  val `final` = name("final")
+  val `finally` = name("finally")
+  val `for` = name("for")
+  val `forSome` = name("forSome")
+  val `if` = name("if")
+  val `implicit` = name("implicit")
+  val `import` = name("import")
+  val `lazy` = name("lazy")
+  val `match` = name("match")
+  val `new` = name("new")
+  val `null` = name("null") -^ Literal(null)
+  val `object` = name("object")
+  val `override` = name("override")
+  val `package` = name("package")
+  val `private` = name("private")
+  val `protected` = name("protected")
+  val `requires` = name("requires")
+  val `return` = name("return")
+  val `sealed` = name("sealed")
+  val `super` = name("super")
+  val `this` = name("this")
+  val `throw` = name("throw")
+  val `trait` = name("trait")
+  val `try` = name("try")
+  val `true` = name("true") -^ Literal(true)
+  val `type` = name("type")
+  val `val` = name("val")
+  val `var` = name("var")
+  val `while` = name("while")
+  val `with` = name("with")
+  val `yield` = name("yield")
+  val `_` = name("_")
+  
+  val `:` = name(":")
+  val `=` = name("=")
+  val `=>` = name("=>") | name("\u21D2")
+  val `<-` = name("<-")
+  val `<:` = name("<:")
+  val `<%` = name("<%")
+  val `>:` = name(">:")
+  val `#` = name("#")
+  val `@` = name("@")
+  
+  // not reserved, but have special uses:
+  val minus = name("-")  // variance or unary op
+  val plus = name("+") // variance or unary op
+  val bang = name("!") // unary op
+  val tilde = name("~") // unary op
+  val `*` = name("*") // repeated params
+  val `|` = name("|") // combining patterns
+  
+  // separators
+  val comma = token(',')
+  val dot = token('.')
+  val openRound= token('(')
+  val closeRound = token(')')
+  val openSquare = token('[')
+  val closeSquare = token(']')
+  val openCurly = token('{')
+  val closeCurly = token('}')
+  
+  val separator = comma | dot | openRound | closeRound | openSquare | closeSquare | openCurly | closeCurly
+  
   val nonZero = decimalDigit filter (_ > 0)
   val hexNumeral = "0x" -~ hexDigit >> hexN
   val octalNumeral = '0' -~ octalDigit >> octalN
@@ -163,17 +160,13 @@ abstract class ScalaScanner extends Scanner {
     if f != "" || e != "" || q != None
   } yield m + e
   
-  val booleanLiteral = "true" | "false"
+  val booleanLiteral = `true` | `false`
 
   val charElement = charEscapeSeq | printableChar
   val characterLiteral = '\'' -~ (charElement - '\'') ~- '\''
   val stringLiteral = ('\"' -~ charElement *~- '\"' | "\"\"\"" -~ anyChar *~- "\"\"\"") ^^ toString
-  val symbolLiteral = '\'' -~ plainid ^^ Symbol
+  val symbolLiteral = '\'' -~ plainId ^^ Symbol
   
-  val space = (choice(" \t")*) -^ " "
-  val nl = (space ~ newline ~ space) -^ "{nl}"
-  val semi = space ~ (";" | nl) ~ (nl*) ~ space -^ ";"
-   
   // note multi-line comments can nest
   lazy val multiLineComment : Rule[String] = ("/*" -~ (multiLineComment | anyChar) *~- "*/") ^^ toString
   val singleLineComment : Rule[String] = "//" -~ (item - newline *) ^^ toString
@@ -186,7 +179,8 @@ abstract class ScalaScanner extends Scanner {
    *    | stringLiteral
    *    | symbolLiteral
    *    | null */
-  val literal = token(integerLiteral | floatLiteral | doubleLiteral | booleanLiteral | characterLiteral | stringLiteral | symbolLiteral | `null`) ^^ (Literal(_))
+  val literal = (booleanLiteral | `null`
+      | token(integerLiteral | floatLiteral | doubleLiteral | characterLiteral | stringLiteral | symbolLiteral) ^^ (Literal(_)))
   
 
 }

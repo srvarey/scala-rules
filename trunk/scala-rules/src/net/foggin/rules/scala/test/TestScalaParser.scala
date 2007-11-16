@@ -78,9 +78,9 @@ checkRule(typeSpec)(
          
          "if (a) 1 else 2" -> IfExpression(Name("a"),Literal(1),Some(Literal(2))),
          
-         "while (true) println(\"Hello\")" -> WhileExpression(Literal("true"), ApplyExpression(Name("println"),List(Literal("Hello")))),
+         "while (true) println(\"Hello\")" -> WhileExpression(Literal(true), ApplyExpression(Name("println"),List(Literal("Hello")))),
          
-         "do println(\"Hello\") while(true)" -> DoExpression(ApplyExpression(Name("println"),List(Literal("Hello"))), Literal("true")),
+         "do println(\"Hello\") while(true)" -> DoExpression(ApplyExpression(Name("println"),List(Literal("Hello"))), Literal(true)),
          
          "throw x" -> Throw(Name("x")),
          "return x" -> Return(Some(Name("x"))),
@@ -96,7 +96,7 @@ checkRule(typeSpec)(
           "for (i <- list; val j = i; if true) yield j" -> ForComprehension(List(
               Generator(VariablePattern("i"), Name("list"), None), 
               ValEnumerator(VariablePattern("j"), Name("i")), 
-              Guard(Literal("true"))), 
+              Guard(Literal(true))), 
               true, Name("j")),
               
           "a = 1" -> SimpleAssignment("a",Literal(1)),
@@ -131,5 +131,16 @@ checkRule(typeSpec)(
          "1 | 2" -> OrPattern(List(Literal(1), Literal(2)))
      )
      
+   /*
+  checkRule(compilationUnit)("""
+    package a.b
+    
+    class Hello {
+      def hello() {
+        println("Hello World")
+      }
+    }""" -> null)
+    */ 
+    
 println("ScalaParser tests passed")
 }

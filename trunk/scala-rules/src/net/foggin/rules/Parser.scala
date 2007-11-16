@@ -17,7 +17,7 @@ trait Parser[A] extends Rules {
 
   def choice[C <% Seq[A]](seq : C) : Rule[A] = select(seq.map(elem))
 
-  def view[B](transform : Rule[B])(input : Context) = new View[A, B, Context](transform, input)
+  def view[B](transform : Rule[B])(input : Context) = new View[A, B, Context](transform, input, 0)
 }
 
    
