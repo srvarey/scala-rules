@@ -1,0 +1,21 @@
+#summary What's working, what's next
+
+= Available =
+
+  * Simple incremental parser framework build on rule combinator abstraction
+  * Scala scanner
+    * no support for embedded XML yet
+  * Eclipse plugin with an editor that can highlight Scala:
+    * keywords
+    * comments
+    * literals
+
+= Under construction =
+
+  * Full Scala parser
+    * Proper newline handling not done yet
+    * No XML yet
+
+= Planned =
+
+  * AST rewriting?
