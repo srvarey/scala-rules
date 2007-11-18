@@ -10,7 +10,7 @@
             icon="icons/sample.gif"
             contributorClass="org.eclipse.ui.texteditor.BasicTextEditorActionContributor"
             class="net.foggin.rules.plugin.ScalaEditor"
-            id="net.foggin.rules.editors.ScalaEditor">
+            id="net.foggin.rules.plugin.ScalaEditor">
       </editor>
    </extension>
 

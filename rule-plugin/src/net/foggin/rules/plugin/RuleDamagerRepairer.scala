@@ -45,10 +45,10 @@ class PluginScanner extends scala.ScalaScanner with IncrementalScanner {
   val commentToken = style(comment, COMMENT)
   val literalToken = style(literal, LITERAL)
   val keywordToken = style(keyword, KEYWORD)
-  val otherToken = style(semi | separator |  reservedOp | id, DEFAULT)
+  val otherToken = style(space | newline | delimiter | reservedOp | id, DEFAULT)
   
-  val token = memo("token", commentToken | keywordToken | literalToken | otherToken)
-  val tokens = view(token) _
+  val styleToken = memo("styleToken", commentToken | keywordToken | literalToken | otherToken)
+  val styleTokens = view(styleToken) _
 
   def reconciler(sourceViewer : ISourceViewer) = new PresentationReconciler() {
     val dr = new RuleDamagerRepairer(PluginScanner.this)
@@ -92,6 +92,6 @@ class RuleDamagerRepairer(scanner : PluginScanner)
         
   // @see IPresentationRepairer
   def createPresentation(presentation : TextPresentation, region : ITypedRegion) {
-    for (t <- scanner.tokens(input.first)) t.addToPresentation(presentation)
+    for (t <- scanner.styleTokens(input.first)) t.addToPresentation(presentation)
   }
 }
