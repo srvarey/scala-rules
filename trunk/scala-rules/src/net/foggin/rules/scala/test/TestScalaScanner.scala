@@ -10,10 +10,10 @@ object TestScalaScanner extends ScalaScanner with TestScanner {
   checkFailure(integerLiteral)("l", "L", "0x")
   
   checkRule(integerLiteral) (
-      "0l" -> 0,
-      "12 " -> 12 -> " ",
-      "012" -> 10,
-      "0x12" -> 18)
+      "0l" -> LongLiteral(0),
+      "12 " -> IntegerLiteral(12) -> " ",
+      "012" -> IntegerLiteral(10),
+      "0x12" -> IntegerLiteral(18))
       
   checkFailure(opChar)(".", ";", "(", "[", "}")
   
@@ -25,32 +25,32 @@ object TestScalaScanner extends ScalaScanner with TestScanner {
    
       
   // check reserved words aren't ids
-  checkFailure(id)(reserved.toList : _*)
+  checkFailure(id)(ReservedId.reserved.toList : _*)
   //checkFailure(id(false))(reservedOps.keys.toList : _*)
   
   checkRule(keyword)(
-      "abstract" -> "abstract",
-      "_" -> "_")
+      "abstract" -> Keyword("abstract"),
+      "_" -> Keyword("_"))
   
   checkRule(quoteId)("`yield`" -> "yield")
   
   checkRule(id)(
-      "`yield`" -> "yield", 
-      "yield1" -> "yield1", 
-      "yield_+" -> "yield_+",
-      "`\\u21D2`" -> "\u21D2")
+      "`yield`" -> IdToken(false, "yield"), 
+      "yield1" -> IdToken(true, "yield1"), 
+      "yield_+" -> IdToken(true, "yield_+"),
+      "`\\u21D2`" -> IdToken(false, "\u21D2"))
 
   checkRule(floatLiteral)(
-      "1f" -> "1", 
-      "1.0F" -> "1.0", 
-      "1.e2F" -> "1.e2",
-      ".12E3f" -> ".12E3")
+      "1f" -> FloatLiteral(1), 
+      "1.0F" -> FloatLiteral(1), 
+      "1.e2F" -> FloatLiteral(100),
+      ".12E3f" -> FloatLiteral(.12E3f))
 
   checkRule(doubleLiteral)(
-      "1D" -> "1", 
-      "1.0" -> "1.0", 
-      "1e2" -> "1e2",
-      ".12E3D" -> ".12E3")
+      "1D" -> DoubleLiteral(1), 
+      "1.0" -> DoubleLiteral(1), 
+      "1e2" -> DoubleLiteral(100),
+      ".12E3D" -> DoubleLiteral(.12E3))
 
   println("Scanner tests passed")
 }
@@ -59,12 +59,10 @@ object TestIncrementalScalaScanner extends ScalaScanner with IncrementalScanner 
   val document = new EditableDocument[Char]
   val input = document.first
 
-  val tokens = view(memo("token", nl | semi | comment | separator |  literal | keyword | reservedOp | id)) _
+  val tokens = view(memo("token", token)) _
 
   val line = memo("line", newline -^ "" | (!newline -~ item +) ~- (newline?) ^^ toString)
   val lines = view(line) _
-
-  //var input = new EditableInput[Char]
 
   def printTokens() {
     println; println("Tokens: ")

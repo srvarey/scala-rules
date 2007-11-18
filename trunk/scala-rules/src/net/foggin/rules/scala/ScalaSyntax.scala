@@ -11,7 +11,7 @@ case class Name(id : String) extends PathElement with Expression
 
 case object Underscore extends Expression
 //case object UnderscoreRepeated extends Expression
-case class Literal[T](value : T) extends Expression
+//case class Literal(token : LiteralToken) extends Expression
 case class TupleExpression(exprs : List[Expression]) extends Expression
 case class DotExpression(expr1 : Expression, expr2 : PathElement) extends Expression
 case class ExpressionTypeArgs(expr : Expression, typeArgs : List[Type]) extends Expression
