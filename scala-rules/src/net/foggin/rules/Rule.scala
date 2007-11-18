@@ -48,6 +48,8 @@ class Rule[S, +A](f : S => Result[A, S]) extends (S => Result[A, S])
  
   def >>[B](f : A => Rule[S, B]) = flatMap(f)
   
+  def >>?[B](pf : PartialFunction[A, Rule[S, B]]) = >> { a => if (pf.isDefinedAt(a)) pf(a) else zero }
+  
   def ~[B](next : => Rule[S, B]) = for (a <- this; b <- next) yield new ~(a, b)
   
   def ~-[B](next : => Rule[S, B]) = for (a <- this; b <- next) yield a
