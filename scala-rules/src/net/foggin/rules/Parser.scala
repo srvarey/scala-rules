@@ -17,6 +17,9 @@ trait Parser[A] extends Rules {
 
   def choice[C <% Seq[A]](seq : C) : Rule[A] = select(seq.map(elem))
 
+  /** Allows rules like 'a' to 'z' */
+  implicit def iteratorToChoice[B <: Iterator[A]](iterator : B) : Rule[A] = choice(iterator.toList)
+
   def view[B](transform : Rule[B])(input : Context) = new View[A, B, Context](transform, input, 0)
 }
 
@@ -30,8 +33,6 @@ trait Scanner extends Parser[Char] {
 
   def toString(seq : Seq[Any]) = seq.mkString("")
   
-  def range(from : Char, to : Char) = item filter { ch => ch >= from && ch <= to }
-
   import Character._
   def whitespace = item filter isWhitespace *
   def newline = "\r\n" | "\n" | "\r"
@@ -39,21 +40,3 @@ trait Scanner extends Parser[Char] {
   def trim[A](rule : Rule[A]) = whitespace -~ rule ~- whitespace
 }
 
-
-object ArithmeticEvaluator extends Scanner with Application {
-  type Context = ArrayInput[Char]
-  
-  lazy val expr : Rule[Int] = term ~*~ (op('+', _ + _) | op('-', _ - _))
-  lazy val term : Rule[Int] = factor ~*~ (op('*', _ * _) | op('/', _ / _))
-  lazy val factor : Rule[Int] = trim(number | '(' -~ expr ~- ')')
-  lazy val number = (range('0', '9')+) ^^ toString ^^ (_ toInt)
-  
-  private def op(r : Rule[Any], f : (Int, Int) => Int) = r ^^ { any => f }
-
-  def evaluate(string : String) = {
-    expect(expr ~- !item | error("Invalid expression: " + string))(string)
-  }
-  
-  println(evaluate("7 + 5 * (5+ 6 / 2 - 1)"))
-  println(evaluate("10 / 5 / 2"))
-}

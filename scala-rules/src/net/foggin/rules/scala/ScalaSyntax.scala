@@ -67,7 +67,7 @@ case class OrPattern(patterns : List[Expression]) extends Expression
 abstract class Type
 abstract class ExistentialType extends Type
 
-case class FunctionType(parameterTypes : Seq[(Type, Boolean)], resultType : Type) extends Type
+case class FunctionType(parameterTypes : List[ParameterType], resultType : Type) extends Type
 
 case class InfixType(id : String, left : Type, right : Type) extends Type
 case class CompoundType(annotTypes : List[Type], refinement : Option[Refinement]) extends Type

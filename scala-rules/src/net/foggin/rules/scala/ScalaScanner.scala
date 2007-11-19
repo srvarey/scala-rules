@@ -110,6 +110,7 @@ abstract class ScalaScanner extends Scanner {
       Success(token, new Tokens(context, index + 1, head, tail, token))
     }
 
+    override def toString = input toString
   }
   
   def tokens(input : Context) = new Tokens(input, 0, true, Nil, null)
@@ -117,8 +118,7 @@ abstract class ScalaScanner extends Scanner {
   val space = choice(" \t") -^ Space
    
 
-  //val decimalDigit = choice('0' to '9') ^^ (_ - 48L)
-  val decimalDigit = range('0', '9') ^^ (_ - 48L)
+  val decimalDigit = ('0' to '9') ^^ (_ - 48L)
   def decimal(n : Long) = decimalDigit ^^ (n * 10 + _)
   def decimalN(n : Long) : Rule[Long] = decimal(n) >> decimalN | success(n)
   
@@ -126,7 +126,7 @@ abstract class ScalaScanner extends Scanner {
   def octal(n : Long) = octalDigit ^^ (n * 8 + _)
   def octalN(n : Long) : Rule[Long] = octal(n) >> octalN | success(n)
   
-  val hexDigit = decimalDigit | range('A', 'F') ^^ (_ - 55L) | range('a', 'f') ^^ (_ - 87L)
+  val hexDigit = decimalDigit | ('A' to 'F') ^^ (_ - 55L) | ('a' to 'f') ^^ (_ - 87L)
   def hex(n : Long) = hexDigit ^^ (n * 16 + _)
   def hexN(n : Long) : Rule[Long] = hex(n) >> hexN | success(n)
 
@@ -171,7 +171,7 @@ abstract class ScalaScanner extends Scanner {
     else IntegerLiteral(value.asInstanceOf[Int])
   
   val intPart = decimalNumeral ^^ (_ toString) | ""
-  val floatPart = ('.' ~++ (range('0', '9')*) ^^ toString) | ""
+  val floatPart = ('.' ~++ (('0' to '9')*) ^^ toString) | ""
   val exponentPart = (for (e <- choice("eE"); s <- "+" | "-" | ""; n <- intPart) yield e + s + n) | ""
 
   val floatLiteral = for {
@@ -231,82 +231,3 @@ abstract class ScalaScanner extends Scanner {
       
 
 }
-
-
-/*
-
-val `abstract` = name("abstract")
-val `case` = name("case")
-val `catch` = name("catch")
-val `class` = name("class")
-val `def` = name("def")
-val `do` = name("do")
-val `else` = name("else")
-val `extends` = name("extends")
-val `false` = name("false") -^ Literal(false)
-val `final` = name("final")
-val `finally` = name("finally")
-val `for` = name("for")
-val `forSome` = name("forSome")
-val `if` = name("if")
-val `implicit` = name("implicit")
-val `import` = name("import")
-val `lazy` = name("lazy")
-val `match` = name("match")
-val `new` = name("new")
-val `null` = name("null") -^ Literal(null)
-val `object` = name("object")
-val `override` = name("override")
-val `package` = name("package")
-val `private` = name("private")
-val `protected` = name("protected")
-val `requires` = name("requires")
-val `return` = name("return")
-val `sealed` = name("sealed")
-val `super` = name("super")
-val `this` = name("this")
-val `throw` = name("throw")
-val `trait` = name("trait")
-val `try` = name("try")
-val `true` = name("true") -^ Literal(true)
-val `type` = name("type")
-val `val` = name("val")
-val `var` = name("var")
-val `while` = name("while")
-val `with` = name("with")
-val `yield` = name("yield")
-val `_` = name("_")
-
-val `:` = name(":")
-val `=` = name("=")
-val `=>` = name("=>") | name("\u21D2")
-val `<-` = name("<-")
-val `<:` = name("<:")
-val `<%` = name("<%")
-val `>:` = name(">:")
-val `#` = name("#")
-val `@` = name("@")
-
-// not reserved, but have special uses:
-val minus = name("-")  // variance or unary op
-val plus = name("+") // variance or unary op
-val bang = name("!") // unary op
-val tilde = name("~") // unary op
-val `*` = name("*") // repeated params
-val `|` = name("|") // combining patterns
-
-// separators
-val comma = token(',')
-val dot = token('.')
-val openRound= token('(')
-val closeRound = token(')')
-val openSquare = token('[')
-val closeSquare = token(']')
-val openCurly = token('{')
-val closeCurly = token('}')
-
-val separator = comma | dot | openRound | closeRound | openSquare | closeSquare | openCurly | closeCurly
-
-*/
-
-
