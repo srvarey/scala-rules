@@ -65,22 +65,17 @@ case class OrPattern(patterns : List[Expression]) extends Expression
 
 
 abstract class Type
-
-
 case class FunctionType(parameterTypes : List[ParameterType], resultType : Type) extends Type
 case class ExistentialType(infixType : Type, declarations : List[Declaration]) extends Type
-
-case class InfixType(id : String, left : Type, right : Type) extends Type
-case class CompoundType(annotTypes : List[Type], refinement : Option[Refinement]) extends Type
-case class Refinement extends Type
-case class AnnotatedType(annotations : List[Annotation], annotated : SimpleType) extends Type
-
-abstract class SimpleType extends Type
-case class SingletonType(path : List[PathElement]) extends SimpleType
-case class TypeDesignator(path : List[PathElement], id : String) extends SimpleType
-case class TupleType(types : Seq[Type]) extends SimpleType
-case class TypeProjection(simpleType : SimpleType, id : String) extends SimpleType
-case class ParameterizedType(simpleType : SimpleType, typeArgs : Seq[Type]) extends SimpleType
+case class InfixType(left : Type)(id : String, right : Type) extends Type
+case class CompoundType(baseType : Type)(withType : Type) extends Type
+case class Refinement(statements : List[Statement]) extends Type
+case class AnnotatedType(annotations : List[Annotation], annotated : Type) extends Type
+case class SingletonType(path : List[PathElement]) extends Type
+case class TypeDesignator(path : List[PathElement], id : String) extends Type
+case class TupleType(types : Seq[Type]) extends Type
+case class TypeProjection(simpleType : Type, id : String) extends Type
+case class ParameterizedType(simpleType : Type, typeArgs : Seq[Type]) extends Type
 
 abstract class Annotation
 

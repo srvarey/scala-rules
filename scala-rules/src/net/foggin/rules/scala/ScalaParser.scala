@@ -21,8 +21,10 @@ class ScalaParser extends Parser[ScalaToken] {
   def curly[T](rule : Rule[T]) = elem(OpenCurly) -~ rule ~- elem(CloseCurly)
   
   def list[T](rule : Rule[T]) = rule ~+~ comma
-  def optList[T](rule : Rule[T]) = list(rule) | success(Nil)
+  //def optList[T](rule : Rule[T]) = list(rule) | success(Nil)
   
+  def statements[T](rule : Rule[T]) = elem(OpenCurly) -~ (rule ~+~ semi) ~- elem(CloseCurly)
+ 
   val nl = elem(Newline)
   val semi = (elem(Semicolon) | nl) ~- (nl*)
   val dot = elem(Dot)
@@ -67,7 +69,7 @@ class ScalaParser extends Parser[ScalaToken] {
   lazy val typeSpec : Rule[Type] = functionType | existentialType | infixType
   
   lazy val functionType = (functionParameters | simpleFunctionParameter) ~- "=>" ~ typeSpec ^~^ FunctionType
-  lazy val functionParameters = round(parameterType ~+~ comma) filter checkParamTypes
+  lazy val functionParameters = round(parameterType ~+~ comma).filter(checkParamTypes) | round(success(Nil))
   lazy val simpleFunctionParameter = infixType ^^ { t => List(ParameterType(false, t, false)) }
   lazy val parameterType = ("=>"-?) ~ typeSpec ~ ("*"-?) ^~~^ ParameterType
   
@@ -79,7 +81,7 @@ class ScalaParser extends Parser[ScalaToken] {
   }
   
   /** ExistentialClause ::= forSome ‘{’ ExistentialDcl {semi ExistentialDcl} ‘}’ */
-  lazy val existentialType = infixType ~ ("forSome" -~ curly(existentialDcl ~+~ semi)) ^~^ ExistentialType
+  lazy val existentialType = infixType ~- "forSome" ~ curly(existentialDcl ~+~ semi) ^~^ ExistentialType
   
   /** ExistentialDcl ::= type TypeDcl | val ValDcl */
   lazy val existentialDcl = "type" -~ typeDcl |"val" -~ valDcl
@@ -87,17 +89,21 @@ class ScalaParser extends Parser[ScalaToken] {
   /** InfixType ::= CompoundType {id [nl] CompoundType} */
   lazy val infixType : Rule[Type] = compoundType >> infixType
   def infixType(left : Type) : Rule[Type] = (
-      (id ~- (nl?) ~ compoundType ^^ { case id ~ right => InfixType(id, left, right) }) >> infixType
+      (id ~- (nl?) ~ compoundType ^~^ InfixType(left)) >> infixType
       | success(left))
       
   /** CompoundType ::= AnnotType {with AnnotType} [Refinement]
    *    | Refinement */
-  lazy val compoundType : Rule[Type] = (
-      annotType ~++ ("with" -~ annotType *) ~ refinement ^^ { case as ~ r => CompoundType(as, Some(r)) }
-      | annotType ~++ ("with" -~ annotType +) ~ (refinement?) ^~^ CompoundType
-      | refinement ^^ { r => CompoundType(Nil, Some(r)) }
-      | annotType)
+  lazy val compoundType : Rule[Type] = refinement | annotType >> compoundType
+  def compoundType(typeSpec : Type) : Rule[Type] = (
+      "with" -~ (annotType ^^ CompoundType(typeSpec)) >> compoundType
+      | refinement ^^ CompoundType(typeSpec)
+      | success(typeSpec))
       
+  /** Refinement ::= [nl] ‘{’ RefineStat {semi RefineStat} ‘}’
+   * RefineStat ::= Dcl | type TypeDef
+   */
+  lazy val refinement : Rule[Refinement] = (nl?) -~ statements(dcl | typeDef) ^^ Refinement
     
   /** AnnotType ::= {Annotation} SimpleType */
   lazy val annotType = ((annotation +) ~ simpleType ^~^ AnnotatedType
@@ -116,27 +122,19 @@ class ScalaParser extends Parser[ScalaToken] {
       | stableId ^^ { list => { val Name(id) :: rest = list.reverse; TypeDesignator(rest.reverse, id) }}
       | round(types ~- (comma?)) ^^ TupleType) >> typeArgsOrProjection
       
-  def typeArgsOrProjection(simpleType : SimpleType) : Rule[SimpleType] = (
+  def typeArgsOrProjection(simpleType : Type) : Rule[Type] = (
       parameterizedType(simpleType) >> typeArgsOrProjection
       | projection(simpleType) >> typeArgsOrProjection
       | success(simpleType))
       
-  def parameterizedType(simpleType : SimpleType) = square(types) ^^ (ParameterizedType(simpleType, _))
-  def projection(simpleType : SimpleType) = "#" -~ id ^^ (TypeProjection(simpleType, _))
+  def parameterizedType(simpleType : Type) = square(types) ^^ (ParameterizedType(simpleType, _))
+  def projection(simpleType : Type) = "#" -~ id ^^ (TypeProjection(simpleType, _))
       
   /** TypeArgs ::= ‘[’ Types ‘]’ */
   lazy val typeArgs = square(types)
 
   /** Types ::= Type {‘,’ Type} */
   lazy val types : Rule[List[Type]] = typeSpec ~+~ comma
-
-  /** Refinement ::= [nl] ‘{’ RefineStat {semi RefineStat} ‘}’ */
-  lazy val refinement : Rule[Refinement] = failure //(nl?) -~ curly(refineStat ~+~ semi) 
-
-  /** RefineStat ::= Dcl
-| type TypeDef
-| */
-  lazy val refineStat = dcl | "type" ~ typeDef
 
   /** TypePat ::= Type */
   val typePat = typeSpec
@@ -538,7 +536,7 @@ class ScalaParser extends Parser[ScalaToken] {
       | "def" -~ funSig ~ (":" -~ typeSpec ?) ~ ("=" -~ expr) ^~~~~~^ FunctionDefinition
       | "def" -~ funSig ~ ((nl?) -~ curly(block)) ^~~~~^ ProcedureDefinition
       | "def" -~ "this" -~ (paramClause+) ~ (implicitParamClause?) ~ ("=" -~ constrExpr | (nl?) -~ constrBlock) ^~~^ ConstructorDefinition
-      | "type" -~ (nl*) -~ typeDef ^~~^ TypeDefinition
+      | typeDef
       | tmplDef)
 
   /** ConstrExpr ::= SelfInvocation | ConstrBlock */
@@ -556,7 +554,7 @@ class ScalaParser extends Parser[ScalaToken] {
   lazy val patDef = (pattern2 ~+~ comma) ~ (":" -~ typeSpec ?) ~ ("=" -~ expr)
 
   /** TypeDef ::= id [TypeParamClause] ‘=’ Type */
-  lazy val typeDef = id ~ (typeParamClause?) ~ ("=" -~ typeSpec)
+  lazy val typeDef = "type" -~ (nl*) -~ id ~ (typeParamClause?) ~ ("=" -~ typeSpec) ^~~^ TypeDefinition
 
   /** TmplDef ::= [case] class ClassDef
    *     | [case] object ObjectDef

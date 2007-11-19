@@ -51,12 +51,11 @@ checkRule(typeSpec)(
     "A#B[C, D]" -> ParameterizedType(
         TypeProjection(TypeDesignator(Nil, "A"), "B"), 
         List(TypeDesignator(Nil, "C"), TypeDesignator(Nil, "D"))),
-    "A with B" -> CompoundType(List(
-        TypeDesignator(Nil, "A"), 
-        TypeDesignator(Nil, "B")), None),
+    "A with B" -> CompoundType(TypeDesignator(Nil, "A"))(TypeDesignator(Nil, "B")),
    "A => B" -> FunctionType(List(ParameterType(false, TypeDesignator(Nil, "A"), false)), TypeDesignator(Nil, "B")),
+   "() => B" -> FunctionType(List(), TypeDesignator(List(), "B")),
     "(=> A, B*) => C" -> FunctionType(List(ParameterType(true, TypeDesignator(Nil, "A"), false), ParameterType(false, TypeDesignator(Nil, "B"), true)), TypeDesignator(Nil, "C")),
-    "A B C" -> InfixType("B",TypeDesignator(Nil, "A"),TypeDesignator(Nil, "C"))
+    "A B C" -> InfixType(TypeDesignator(Nil, "A"))("B", TypeDesignator(Nil, "C"))
  )
  
  checkRule(dcl)(
