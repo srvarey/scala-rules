@@ -45,21 +45,25 @@ case object CloseSquare extends ScalaToken
 case object OpenCurly extends ScalaToken
 case object CloseCurly extends ScalaToken
 
-case class IdToken(isVarId : Boolean, id : String) extends ScalaToken
+abstract class IdToken extends ScalaToken { def id : String }
 
-abstract class LiteralToken extends ScalaToken with Expression
+case class Operator(id : String) extends IdToken
+case class QuotedId(id : String) extends IdToken
+case class UnquotedId(varId : Boolean, id : String) extends IdToken
 
-case object NullLiteral extends LiteralToken
-case object TrueLiteral extends LiteralToken
-case object FalseLiteral extends LiteralToken
+abstract class Literal extends ScalaToken with Expression
 
-case class CharacterLiteral(char : Char) extends LiteralToken
-case class StringLiteral(string : String) extends LiteralToken
-case class SymbolLiteral(symbol : Symbol) extends LiteralToken
-case class IntegerLiteral(value : Int) extends LiteralToken
-case class LongLiteral(value : Long) extends LiteralToken
-case class FloatLiteral(value : Float) extends LiteralToken
-case class DoubleLiteral(value : Double) extends LiteralToken
+case object Null extends Literal
+case object True extends Literal
+case object False extends Literal
+
+case class CharacterLiteral(char : Char) extends Literal
+case class StringLiteral(string : String) extends Literal
+case class SymbolLiteral(symbol : Symbol) extends Literal
+case class IntegerLiteral(value : Int) extends Literal
+case class LongLiteral(value : Long) extends Literal
+case class FloatLiteral(value : Float) extends Literal
+case class DoubleLiteral(value : Double) extends Literal
 
 case object Comment extends ScalaToken
 case object Space extends ScalaToken
@@ -147,13 +151,14 @@ abstract class ScalaScanner extends Scanner {
   val quoteId = '`' -~ (printableChar +~- '`') ^^ toString
   val unquotedId = letter ~++ idRest ^^ toString
   val op = (opChar+) ^^ toString
-  val plainId = (unquotedId | op) filter { id => !ReservedId(id) }
   
   val keyword = unquotedId.filter(ReservedId(_)) ^^ Keyword
   val reservedOp = op.filter(ReservedId(_)) ^^ ReservedOperator
   val reservedId : Rule[ReservedId] = keyword | reservedOp
   
-  val id = ((lower&)-?) ~ (quoteId | plainId) ^~^ IdToken
+  val id = (quoteId ^^ QuotedId
+      | op.filter(!ReservedId(_)) ^^ Operator
+      | ((lower&)-?) ~ unquotedId.filter(!ReservedId(_)) ^~^ UnquotedId)
   
   val nonZero = decimalDigit filter (_ > 0)
   val hexNumeral = "0x" -~ hexDigit >> hexN
@@ -185,7 +190,7 @@ abstract class ScalaScanner extends Scanner {
   val charElement = charEscapeSeq | printableChar
   val characterLiteral = '\'' -~ (charElement - '\'') ~- '\'' ^^ CharacterLiteral
   val stringLiteral = ('\"' -~ charElement *~- '\"' | "\"\"\"" -~ anyChar *~- "\"\"\"") ^^ toString ^^ StringLiteral
-  val symbolLiteral = '\'' -~ plainId ^^ Symbol ^^ SymbolLiteral
+  val symbolLiteral = '\'' -~ (unquotedId | op) ^^ Symbol ^^ SymbolLiteral
   
   // note multi-line comments can nest
   lazy val multiLineComment : Rule[String] = ("/*" -~ (multiLineComment | anyChar) *~- "*/") ^^ toString
@@ -195,9 +200,9 @@ abstract class ScalaScanner extends Scanner {
   val nl = (space | comment *) -~ newline -^ Newline
   val delimiter = choice(";.,()[]{}")
   
-  val literal : Rule[LiteralToken] = ("null" -~ !idChar -^ NullLiteral
-      | "true" -~ !idChar -^ TrueLiteral
-      | "false" -~ !idChar -^ FalseLiteral
+  val literal : Rule[Literal] = ("null" -~ !idChar -^ Null
+      | "true" -~ !idChar -^ True
+      | "false" -~ !idChar -^ False
       | integerLiteral 
       | characterLiteral 
       | stringLiteral 

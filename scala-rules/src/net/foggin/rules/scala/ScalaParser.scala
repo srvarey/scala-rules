@@ -8,9 +8,11 @@ package net.foggin.rules.scala
 class ScalaParser extends Parser[ScalaToken] {
   type Context = ScalaScanner#Tokens
   
-  implicit def stringToReservedId(string : String) : Rule[String] = item >>? {
+  implicit def stringToId(string : String) : Rule[String] = item >>? {
     case Keyword(id) if id == string => success(id)
     case ReservedOperator(id) if id == string => success(id)
+    case Operator(id) if id == string => success(id)
+    case UnquotedId(_, id) if id == string => success(id)
   }
   
   def round[T](rule : Rule[T]) = elem(OpenRound) -~ rule ~- elem(CloseRound)
@@ -22,12 +24,10 @@ class ScalaParser extends Parser[ScalaToken] {
   val dot = elem(Dot)
   val comma = elem(Comma)
   
-  def id(string : String) : Rule[String] = id filter (_ == string)
+  val id : Rule[String] = item >>? { case token : IdToken => success(token.id) }
+  val varId = item >>? { case UnquotedId(true, id) => success(id) }
   
-  val id : Rule[String] = item >>? { case IdToken(_, id) => success(id) }
-  val varId = item >>? { case IdToken(true, id) => success(id) }
-  
-  val literal = item >>? { case token : LiteralToken => success(token) }
+  val literal = item >>? { case token : Literal => success(token) }
   
   /** QualId ::= id {‘.’ id} */
   val qualId = id ~+~ dot
@@ -169,7 +169,7 @@ class ScalaParser extends Parser[ScalaToken] {
       | assignment
       | postfixExpr ~- ":" ~ compoundType ^~^ TypedExpression
       | postfixExpr ~- ":" ~ (annotation*) ^~^ AnnotatedExpression
-      | postfixExpr ~- ":" ~- "_" ~- id("*") ^^ VarArgExpression
+      | postfixExpr ~- ":" ~- "_" ~- "*" ^^ VarArgExpression
       | postfixExpr ~- "match"~ curly(caseClauses) ^~^ MatchExpression
       | postfixExpr)
       
@@ -215,7 +215,7 @@ class ScalaParser extends Parser[ScalaToken] {
   val infixExpr = infix(operators)
 
   /** PrefixExpr ::= [‘-’ | ‘+’ | ‘~’ | ‘!’] SimpleExpr */
-  lazy val prefixExpr = ((id("+") | id("-") | id("!") | id("~")) ~ simpleExpr ^~^ PrefixExpression
+  lazy val prefixExpr = (("+" |"-" | "!" | "~") ~ simpleExpr ^~^ PrefixExpression
       | simpleExpr)
 
   /** SimpleExpr ::= new (ClassTemplate | TemplateBody)
@@ -309,7 +309,7 @@ class ScalaParser extends Parser[ScalaToken] {
   lazy val guard = "if" -~ postfixExpr
 
   /** Pattern ::= Pattern1 { ‘|’ Pattern1 } */
-  lazy val pattern = (pattern1 ~++ (id("|") -~ pattern1 +)  ^^ OrPattern
+  lazy val pattern = (pattern1 ~++ ("|" -~ pattern1 +)  ^^ OrPattern
       | pattern1)
 
   /** Pattern1 ::= varid ‘:’ TypePat
@@ -328,7 +328,7 @@ class ScalaParser extends Parser[ScalaToken] {
 
   /** Pattern3 ::= SimplePattern | SimplePattern { id [nl] SimplePattern } */
   lazy val pattern3 : Rule[Expression] = (
-      simplePattern ~ (((id -id("|")) ~- (nl?) ~ simplePattern ^^ { case a ~ b => (a, b) })+) ^~^ InfixPattern
+      simplePattern ~ (((id - "|") ~- (nl?) ~ simplePattern ^^ { case a ~ b => (a, b) })+) ^~^ InfixPattern
       | simplePattern)
 
   /** SimplePattern ::= ‘_’
@@ -345,7 +345,7 @@ class ScalaParser extends Parser[ScalaToken] {
       | varId ~- !dot ^^ VariablePattern
       | literal
       | stableId ~ round(patterns ~- (comma?)) ^^ { case a ~ b => StableIdPattern(a, Some(b), false) }
-      | stableId ~ round((pattern ~- comma *) ~- "_" ~- id("*")) ^^ { case a ~ b => StableIdPattern(a, Some(b), true) }
+      | stableId ~ round((pattern ~- comma *) ~- "_" ~- "*") ^^ { case a ~ b => StableIdPattern(a, Some(b), true) }
       | stableId  ^^ (StableIdPattern(_, None, false))
       | round(patterns ~- (comma?)) ^^ TupleExpression
       | xmlPattern)
@@ -362,8 +362,8 @@ class ScalaParser extends Parser[ScalaToken] {
   /** FunTypeParamClause::= ‘[’ TypeParam {‘,’ TypeParam} ‘]’ */
   lazy val funTypeParamClause = square(typeParam ~+~ comma)
 
-  val variance = (id("+") -^ Covariant
-      | id("-") -^ Contravariant
+  val variance = ("+" -^ Covariant
+      | "-" -^ Contravariant
       | success(Invariant))
   
   /** VariantTypeParam ::= [‘+’ | ‘-’] TypeParam */
@@ -385,7 +385,7 @@ class ScalaParser extends Parser[ScalaToken] {
   lazy val param = (annotation*) ~ id ~ (paramType?) ^~~^ Parameter
 
   /** ParamType ::= Type | ‘=>’ Type | Type ‘*’ */
-  lazy val paramType = ":" -~ ("=>"-?) ~ typeSpec ~ (id("*")-?) ^~~^ ParameterType
+  lazy val paramType = ":" -~ ("=>"-?) ~ typeSpec ~ ("*"-?) ^~~^ ParameterType
 
   /** ClassParamClauses ::= {ClassParamClause} [[nl] ‘(’ implicit ClassParams ‘)’] */
   lazy val classParamClauses = (classParamClause*) ~ ((nl?) -~ round("implicit" -~ classParams) ?) ^~^ ClassParamClauses

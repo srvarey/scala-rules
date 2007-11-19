@@ -110,9 +110,9 @@ checkRule(typeSpec)(
          
          "if (a) 1 else 2" -> IfExpression(Name("a"),IntegerLiteral(1),Some(IntegerLiteral(2))),
          
-         "while (true) println(\"Hello\")" -> WhileExpression(TrueLiteral, ApplyExpression(Name("println"),List(StringLiteral("Hello")))),
+         "while (true) println(\"Hello\")" -> WhileExpression(True, ApplyExpression(Name("println"),List(StringLiteral("Hello")))),
          
-         "do println(\"Hello\") while(true)" -> DoExpression(ApplyExpression(Name("println"),List(StringLiteral("Hello"))), TrueLiteral),
+         "do println(\"Hello\") while(true)" -> DoExpression(ApplyExpression(Name("println"),List(StringLiteral("Hello"))), True),
          
          "throw x" -> Throw(Name("x")),
          "return x" -> Return(Some(Name("x"))),
@@ -128,7 +128,7 @@ checkRule(typeSpec)(
           "for (i <- list; val j = i; if true) yield j" -> ForComprehension(List(
               Generator(VariablePattern("i"), Name("list"), None), 
               ValEnumerator(VariablePattern("j"), Name("i")), 
-              Guard(TrueLiteral)), 
+              Guard(True)), 
               true, Name("j")),
               
           "a = 1" -> SimpleAssignment("a",IntegerLiteral(1)),
