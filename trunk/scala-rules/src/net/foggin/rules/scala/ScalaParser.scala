@@ -81,10 +81,10 @@ class ScalaParser extends Parser[ScalaToken] {
   }
   
   /** ExistentialClause ::= forSome ‘{’ ExistentialDcl {semi ExistentialDcl} ‘}’ */
-  lazy val existentialType = infixType ~- "forSome" ~ curly(existentialDcl ~+~ semi) ^~^ ExistentialType
+  lazy val existentialType = infixType ~- "forSome" ~ statements(typeDcl | valDcl) ^~^ ExistentialType
   
   /** ExistentialDcl ::= type TypeDcl | val ValDcl */
-  lazy val existentialDcl = "type" -~ typeDcl |"val" -~ valDcl
+  //lazy val existentialDcl = typeDcl | valDcl
         
   /** InfixType ::= CompoundType {id [nl] CompoundType} */
   lazy val infixType : Rule[Type] = compoundType >> infixType
@@ -488,20 +488,16 @@ class ScalaParser extends Parser[ScalaToken] {
    *     | var VarDcl
    *     | def FunDcl
    *     | type {nl} TypeDcl
+   * ValDcl ::= ids ‘:’ Type
+   * VarDcl ::= ids ‘:’ Type
+   * FunDcl ::= FunSig [‘:’ Type]
+   * TypeDcl ::= id [TypeParamClause] [‘>:’ Type] [‘<:’ Type] 
    */
-  lazy val dcl = ("val" -~ valDcl
-      | "var" -~ varDcl
-      | "def" -~ funDcl
-      | "type" -~ (nl*) -~ typeDcl)
-
-  /** ValDcl ::= ids ‘:’ Type */
-  lazy val valDcl = ids ~- ":" ~ typeSpec ^~^ ValDeclaration
-
-  /** VarDcl ::= ids ‘:’ Type */
-  lazy val varDcl = ids ~- ":" ~ typeSpec ^~^ VarDeclaration
-
-  /** FunDcl ::= FunSig [‘:’ Type] */
-  lazy val funDcl = funSig ~ (":" -~ typeSpec ?)  ^~~~~^ FunctionDeclaration
+  lazy val dcl = (valDcl | varDcl | funDcl | typeDcl)
+  lazy val valDcl = "val" -~ ids ~- ":" ~ typeSpec ^~^ ValDeclaration
+  lazy val varDcl = "var" -~ ids ~- ":" ~ typeSpec ^~^ VarDeclaration
+  lazy val funDcl = "def" -~ funSig ~ (":" -~ typeSpec ?)  ^~~~~^ FunctionDeclaration
+  lazy val typeDcl = "type" -~ (nl*) -~ id ~ (typeParamClause?) ~ (">:" -~ typeSpec ?) ~ ("<:" -~ typeSpec ?) ^~~~^ TypeDeclaration
 
   /** FunSig ::= id [FunTypeParamClause] ParamClauses 
    *
@@ -511,10 +507,6 @@ class ScalaParser extends Parser[ScalaToken] {
 
   lazy val implicitParamClause = (nl?) -~ round("implicit" -~ params)
   
-  /** TypeDcl ::= id [TypeParamClause] [‘>:’ Type] [‘<:’ Type] */
-  lazy val typeDcl = id ~ (typeParamClause?) ~ (">:" -~ typeSpec ?) ~ ("<:" -~ typeSpec ?) ^~~~^ TypeDeclaration
-
-
   /** Def ::= val PatDef
    *     | var VarDef
    *     | def FunDef
@@ -523,7 +515,7 @@ class ScalaParser extends Parser[ScalaToken] {
    *
    *  VarDef ::= PatDef | ids ‘:’ Type ‘=’ ‘_’ 
    *
-   *   FunDef ::= FunSig ‘:’ Type ‘=’ Expr   // NB think :Type should be optional here
+   *   FunDef ::= FunSig [‘:’ Type] ‘=’ Expr 
    *     | FunSig [nl] ‘{’ Block ‘}’
    *     | this ParamClause ParamClauses (‘=’ ConstrExpr | [nl] ConstrBlock) 
    *
