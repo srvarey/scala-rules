@@ -12,27 +12,31 @@ class ScalaParser extends Parser[ScalaToken] {
     case Keyword(id) if id == string => success(id)
     case ReservedOperator(id) if id == string => success(id)
     case Operator(id) if id == string => success(id)
-    case UnquotedId(_, id) if id == string => success(id)
+    case VariableId(id) if id == string => success(id)
+    case NonVariableId(id) if id == string => success(id)
   }
   
   def round[T](rule : Rule[T]) = elem(OpenRound) -~ rule ~- elem(CloseRound)
   def square[T](rule : Rule[T]) = elem(OpenSquare) -~ rule ~- elem(CloseSquare)
   def curly[T](rule : Rule[T]) = elem(OpenCurly) -~ rule ~- elem(CloseCurly)
-
+  
+  def list[T](rule : Rule[T]) = rule ~+~ comma
+  def optList[T](rule : Rule[T]) = list(rule) | success(Nil)
+  
   val nl = elem(Newline)
   val semi = (elem(Semicolon) | nl) ~- (nl*)
   val dot = elem(Dot)
   val comma = elem(Comma)
   
   val id : Rule[String] = item >>? { case token : IdToken => success(token.id) }
-  val varId = item >>? { case UnquotedId(true, id) => success(id) }
+  val varId = item >>? { case VariableId(id) => success(id) }
   val literal = item >>? { case token : Literal => success(token) }
   
   /** QualId ::= id {‘.’ id} */
   val qualId = id ~+~ dot
     
   /** ids ::= id {‘,’ id} */
-  val ids = id ~+~ comma
+  val ids = list(id)
     
   /** Note left-recursive definition.
    *
@@ -58,10 +62,9 @@ class ScalaParser extends Parser[ScalaToken] {
   })
   
   /** Type ::= InfixType ‘=>’ Type
-   *    | ‘(’ [‘=>’ Type] ‘)’ ‘=>’ Type     // don't think this is right - should be multiple parameter types with optional lazy?
+   *    | ‘(’ [‘=>’ Type] ‘)’ ‘=>’ Type     // not right - diferent below
    *    | InfixType [ExistentialClause] */
-  lazy val typeSpec : Rule[Type] = (functionType
-      | (compoundType >> infixType) ~ (existentialClause?) ^^ { case a ~ b => a })
+  lazy val typeSpec : Rule[Type] = functionType | existentialType | infixType
   
   lazy val functionType = (functionParameters | simpleFunctionParameter) ~- "=>" ~ typeSpec ^~^ FunctionType
   lazy val functionParameters = round(parameterType ~+~ comma) filter checkParamTypes
@@ -76,10 +79,10 @@ class ScalaParser extends Parser[ScalaToken] {
   }
   
   /** ExistentialClause ::= forSome ‘{’ ExistentialDcl {semi ExistentialDcl} ‘}’ */
-  lazy val existentialClause : Rule[Any] = failure //"forSome" ~  curly(existentialDcl ~+~ semi)
-      
+  lazy val existentialType = infixType ~ ("forSome" -~ curly(existentialDcl ~+~ semi)) ^~^ ExistentialType
+  
   /** ExistentialDcl ::= type TypeDcl | val ValDcl */
-  lazy val existentialDcl = "type" ~ typeDcl |"val" ~ valDcl
+  lazy val existentialDcl = "type" -~ typeDcl |"val" -~ valDcl
         
   /** InfixType ::= CompoundType {id [nl] CompoundType} */
   lazy val infixType : Rule[Type] = compoundType >> infixType
@@ -113,8 +116,6 @@ class ScalaParser extends Parser[ScalaToken] {
       | stableId ^^ { list => { val Name(id) :: rest = list.reverse; TypeDesignator(rest.reverse, id) }}
       | round(types ~- (comma?)) ^^ TupleType) >> typeArgsOrProjection
       
-  def typeSpecf(b : Boolean) = typeSpec
-
   def typeArgsOrProjection(simpleType : SimpleType) : Rule[SimpleType] = (
       parameterizedType(simpleType) >> typeArgsOrProjection
       | projection(simpleType) >> typeArgsOrProjection
@@ -634,6 +635,6 @@ class ScalaParser extends Parser[ScalaToken] {
   lazy val packaging = ("package" -~ qualId) ~ ((nl?) -~ curly(topStatSeq)) ^~^ Packaging
 
   /** CompilationUnit ::= [package QualId semi] TopStatSeq */
-  lazy val compilationUnit = (nl*) -~ ("package" -~ qualId ~- semi ?) ~ topStatSeq ^~^ CompilationUnit
+  lazy val compilationUnit = ("package" -~ qualId ~- semi ?) ~ topStatSeq ^~^ CompilationUnit
 
 }

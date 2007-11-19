@@ -32,12 +32,10 @@ object TestScalaScanner extends ScalaScanner with TestScanner {
       "abstract" -> Keyword("abstract"),
       "_" -> Keyword("_"))
   
-  checkRule(quoteId)("`yield`" -> "yield")
-  
   checkRule(id)(
       "`yield`" -> QuotedId("yield"), 
-      "yield1" -> UnquotedId(true, "yield1"), 
-      "yield_+" -> UnquotedId(true, "yield_+"),
+      "yield1" -> VariableId("yield1"), 
+      "yield_+" -> VariableId("yield_+"),
       "`\\u21D2`" -> QuotedId("\u21D2"))
 
   checkRule(floatLiteral)(

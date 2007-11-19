@@ -49,7 +49,8 @@ abstract class IdToken extends ScalaToken { def id : String }
 
 case class Operator(id : String) extends IdToken
 case class QuotedId(id : String) extends IdToken
-case class UnquotedId(varId : Boolean, id : String) extends IdToken
+case class VariableId(id : String) extends IdToken
+case class NonVariableId(id : String) extends IdToken
 
 abstract class Literal extends ScalaToken with Expression
 
@@ -100,6 +101,7 @@ abstract class ScalaScanner extends Scanner {
     }
     
     private def isNewlineAllowed = multipleStatements && (last match {
+      case null => false
       case OpenCurly | OpenRound | OpenSquare => false
       case reservedId : ReservedId => reservedId.canTerminateStatement
       case _ => true
@@ -148,17 +150,19 @@ abstract class ScalaScanner extends Scanner {
   val opChar = unicode(MATH_SYMBOL) | unicode(OTHER_SYMBOL) | choice("!#%&*+-/:<=>?@\\^|~")
   lazy val idRest : Rule[List[Char]] = ('_' ~++ (opChar+)) ~- !idChar | !idChar -^ Nil | idChar ~++ idRest
   
-  val quoteId = '`' -~ (printableChar +~- '`') ^^ toString
-  val unquotedId = letter ~++ idRest ^^ toString
-  val op = (opChar+) ^^ toString
+  val quoteId = '`' -~ (printableChar +~- '`') ^^ toString ^^ QuotedId
+  val varId = notReserved(lower ~++ idRest) ^^ VariableId
+  val nonVarId = notReserved(letter ~++ idRest) ^^ NonVariableId
+  val op = notReserved(opChar+) ^^ Operator
+  val plainId = op | varId | nonVarId
+  val id = quoteId | plainId
   
-  val keyword = unquotedId.filter(ReservedId(_)) ^^ Keyword
-  val reservedOp = op.filter(ReservedId(_)) ^^ ReservedOperator
-  val reservedId : Rule[ReservedId] = keyword | reservedOp
+  val keyword = reserved(letter ~++ idRest) ^^ Keyword
+  val reservedOp = reserved(opChar+) ^^ ReservedOperator
+  val reservedId = keyword | reservedOp
   
-  val id = (quoteId ^^ QuotedId
-      | op.filter(!ReservedId(_)) ^^ Operator
-      | ((lower&)-?) ~ unquotedId.filter(!ReservedId(_)) ^~^ UnquotedId)
+  def reserved(rule : Rule[Seq[Char]]) = rule ^^ toString filter { id => ReservedId(id) }
+  def notReserved(rule : Rule[Seq[Char]]) = rule ^^ toString filter { id => !ReservedId(id) }
   
   val nonZero = decimalDigit filter (_ > 0)
   val hexNumeral = "0x" -~ hexDigit >> hexN
@@ -190,7 +194,7 @@ abstract class ScalaScanner extends Scanner {
   val charElement = charEscapeSeq | printableChar
   val characterLiteral = '\'' -~ (charElement - '\'') ~- '\'' ^^ CharacterLiteral
   val stringLiteral = ('\"' -~ charElement *~- '\"' | "\"\"\"" -~ anyChar *~- "\"\"\"") ^^ toString ^^ StringLiteral
-  val symbolLiteral = '\'' -~ (unquotedId | op) ^^ Symbol ^^ SymbolLiteral
+  val symbolLiteral = '\'' -~ plainId ^^ { token => SymbolLiteral(Symbol(token.id)) }
   
   // note multi-line comments can nest
   lazy val multiLineComment : Rule[String] = ("/*" -~ (multiLineComment | anyChar) *~- "*/") ^^ toString
