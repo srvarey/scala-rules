@@ -54,8 +54,8 @@ checkRule(typeSpec)(
     "A with B" -> CompoundType(List(
         TypeDesignator(Nil, "A"), 
         TypeDesignator(Nil, "B")), None),
-   "A => B" -> FunctionType(List((TypeDesignator(Nil, "A"),false)),TypeDesignator(Nil, "B")),
-    "(=> A) => B" -> FunctionType(List((TypeDesignator(Nil, "A"),true)),TypeDesignator(Nil, "B")),
+   "A => B" -> FunctionType(List(ParameterType(false, TypeDesignator(Nil, "A"), false)), TypeDesignator(Nil, "B")),
+    "(=> A, B*) => C" -> FunctionType(List(ParameterType(true, TypeDesignator(Nil, "A"), false), ParameterType(false, TypeDesignator(Nil, "B"), true)), TypeDesignator(Nil, "C")),
     "A B C" -> InfixType("B",TypeDesignator(Nil, "A"),TypeDesignator(Nil, "C"))
  )
  

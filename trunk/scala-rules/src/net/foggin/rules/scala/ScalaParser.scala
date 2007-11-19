@@ -26,7 +26,6 @@ class ScalaParser extends Parser[ScalaToken] {
   
   val id : Rule[String] = item >>? { case token : IdToken => success(token.id) }
   val varId = item >>? { case UnquotedId(true, id) => success(id) }
-  
   val literal = item >>? { case token : Literal => success(token) }
   
   /** QualId ::= id {‘.’ id} */
@@ -61,15 +60,21 @@ class ScalaParser extends Parser[ScalaToken] {
   /** Type ::= InfixType ‘=>’ Type
    *    | ‘(’ [‘=>’ Type] ‘)’ ‘=>’ Type     // don't think this is right - should be multiple parameter types with optional lazy?
    *    | InfixType [ExistentialClause] */
-  lazy val typeSpec : Rule[Type] = (
-      infixType ~- "=>" ~ typeSpec ^^ { 
-        case a ~ b => FunctionType(List(a -> false), b) }
-      | round("=>" -~ typeSpec ?) ~- "=>" ~ typeSpec ^^ { 
-        case Some(a) ~ b => FunctionType(List(a ->true), b)
-        case None ~ b => FunctionType(List(), b) }
-      | (compoundType >> infixType) ~ (existentialClause?) ^^ { 
-        case a ~ b => a })
-    
+  lazy val typeSpec : Rule[Type] = (functionType
+      | (compoundType >> infixType) ~ (existentialClause?) ^^ { case a ~ b => a })
+  
+  lazy val functionType = (functionParameters | simpleFunctionParameter) ~- "=>" ~ typeSpec ^~^ FunctionType
+  lazy val functionParameters = round(parameterType ~+~ comma) filter checkParamTypes
+  lazy val simpleFunctionParameter = infixType ^^ { t => List(ParameterType(false, t, false)) }
+  lazy val parameterType = ("=>"-?) ~ typeSpec ~ ("*"-?) ^~~^ ParameterType
+  
+  // Check that only the last parameter is repeated
+  private def checkParamTypes(list : List[ParameterType]) : Boolean = list match {
+    case ParameterType(_, _, true) :: rest :: Nil => false
+    case first :: rest => checkParamTypes(rest)
+    case Nil => true
+  }
+  
   /** ExistentialClause ::= forSome ‘{’ ExistentialDcl {semi ExistentialDcl} ‘}’ */
   lazy val existentialClause : Rule[Any] = failure //"forSome" ~  curly(existentialDcl ~+~ semi)
       
