@@ -35,10 +35,10 @@ object TestScalaScanner extends ScalaScanner with TestScanner {
   checkRule(quoteId)("`yield`" -> "yield")
   
   checkRule(id)(
-      "`yield`" -> IdToken(false, "yield"), 
-      "yield1" -> IdToken(true, "yield1"), 
-      "yield_+" -> IdToken(true, "yield_+"),
-      "`\\u21D2`" -> IdToken(false, "\u21D2"))
+      "`yield`" -> QuotedId("yield"), 
+      "yield1" -> UnquotedId(true, "yield1"), 
+      "yield_+" -> UnquotedId(true, "yield_+"),
+      "`\\u21D2`" -> QuotedId("\u21D2"))
 
   checkRule(floatLiteral)(
       "1f" -> FloatLiteral(1), 
