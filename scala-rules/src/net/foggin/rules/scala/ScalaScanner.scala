@@ -1,153 +1,59 @@
 package net.foggin.rules.scala
 
 import Character._
-
-object ScalaToken {
-  
-  /** Reserved ids that can terminate a statement */
-  val endStatements = _root_.scala.collection.immutable.Set(
-      "this", "null", "true", "false", "return", "type", "_")
-    
-  /** Reserved ids that cannot start a statement */
-  val cannotStartStatements = _root_.scala.collection.immutable.Set(
-      "catch", "else", "extends", "finally", "forSome", "match", "requires", "with", "yield",
-      "_", ":", "=", "=>", "<-", "<:", "<%", ">:", "#", "\u21D2")
-
-  def canStartStatement(token : ScalaToken) = token match {
-    case OpenRound | OpenCurly => true
-    case _ : Delimiter => false
-    case reserved : ReservedId => !cannotStartStatements.contains(reserved.id)
-    case _ => true
-  }
-
-  def canEndStatement(token : ScalaToken) = token match {
-    case null => false
-    case CloseRound | CloseSquare | CloseCurly => true
-    case _ : Delimiter => false
-    case reserved : ReservedId => endStatements.contains(reserved.id)
-    case _ => true
-  }
-}
-
 import ScalaToken._
 
-abstract class ScalaToken {
+  sealed abstract class State
+  case object MultipleStatements extends State
+  case object SingleStatement extends State
+  case object XML extends State
+
+  case class TokenState(token : ScalaToken, states : List[State]) {
+    
+    def state = states match {
+      case head :: tail => head
+      case _ => MultipleStatements
+    }
+    
+    def previousStates = states match {
+      case head :: tail => tail
+      case _ => Nil
+    }
+    
+    def isNewlineAllowedBefore(next : ScalaToken) =
+        state == MultipleStatements && canEndStatement(token) && canStartStatement(next)
+
+    def next(token : ScalaToken) = token match {
+      case OpenCurly => TokenState(token, MultipleStatements :: states)
+      case OpenRound | OpenSquare => TokenState(token, SingleStatement :: states)
+      case CloseRound | CloseSquare | CloseCurly => TokenState(token, previousStates)
+      case _ => TokenState(token, states)
+    }
+  }
   
-}
-
-abstract class ReservedId extends ScalaToken {
-  def id : String
-}
-
-object ReservedId {
-  val reserved = _root_.scala.collection.immutable.Set(
-      "abstract", "case", "catch", "class", "def", "do", "else", "extends", "false", "final",
-      "finally", "for", "forSome", "if", "implicit", "import", "lazy", "match", "new", "null", "object",
-      "override", "package", "private", "protected", "requires", "return", "sealed", "super", "this", 
-      "throw", "trait", "try", "true", "type", "val", "var", "while", "with", "yield",
-      "_", ":", "=", "=>", "<-", "<:", "<%", ">:", "#", "@", "\u21D2")
-
-  def apply(id : String) = isReserved(id)
-  def isReserved(id : String) = reserved.contains(id)
-}
-
-case class Keyword(id : String) extends ReservedId
-case class ReservedOperator(id : String) extends ReservedId
-
-abstract class Delimiter extends ScalaToken
-case object Newline extends Delimiter
-case object Semicolon extends Delimiter
-case object Dot extends Delimiter
-case object Comma extends Delimiter
-case object OpenRound extends Delimiter
-case object CloseRound extends Delimiter
-case object OpenSquare extends Delimiter
-case object CloseSquare extends Delimiter
-case object OpenCurly extends Delimiter
-case object CloseCurly extends Delimiter
-
-abstract class IdToken extends ScalaToken { def id : String }
-
-case class Operator(id : String) extends IdToken
-case class QuotedId(id : String) extends IdToken
-case class VariableId(id : String) extends IdToken
-case class NonVariableId(id : String) extends IdToken
-
-abstract class Literal extends ScalaToken with Expression
-
-case object Null extends Literal
-case object True extends Literal
-case object False extends Literal
-
-case class CharacterLiteral(char : Char) extends Literal
-case class StringLiteral(string : String) extends Literal
-case class SymbolLiteral(symbol : Symbol) extends Literal
-case class IntegerLiteral(value : Int) extends Literal
-case class LongLiteral(value : Long) extends Literal
-case class FloatLiteral(value : Float) extends Literal
-case class DoubleLiteral(value : Double) extends Literal
-
-case object Comment extends ScalaToken
-case object Space extends ScalaToken
-
-abstract class XMLToken extends ScalaToken
-case object XMLComment extends XMLToken
-case class StartElement(name : String) extends XMLToken
-case class EndElement(name : String) extends XMLToken
-case class AttributeName(name : String) extends XMLToken
-case class AttributeValue(value : String) extends XMLToken
-case object EmptyElement extends XMLToken
-case object ElementContent extends XMLToken
-case class TextContent(text : String) extends XMLToken
-
-
 
 /** Defines the Scala lexical syntax rules.
   *
-  * Note: Embedded XML not yet implemented.
+  * Note: Embedded XML under construction!
+  *
+  * @author Andrew Foggin, based on Scala Language Specification
   */
 abstract class ScalaScanner extends Scanner {
   
   /**
    * Input for Scala Parser.
    */
-  class Tokens(val input : Context, val index : Int,
-      multipleStatements : List[Boolean],
-      xml : boolean,
-      last : ScalaToken)
-      extends Input[ScalaToken, Tokens] {
+  class Tokens(val input : Context, val index : Int, state : TokenState) extends Input[ScalaToken, Tokens] {
     
-    lazy val next = tokenAhead(input) match {
-      case Success(true ~ token, _) if isNewlineAllowedBefore(token) => nextNewline
-      case Success(_ ~ token, context) => token match {
-          case OpenCurly => nextToken(token, context, true :: multipleStatements)
-          case OpenRound | OpenSquare => nextToken(token, context, false :: multipleStatements)
-          case CloseRound | CloseSquare | CloseCurly => nextToken(token, context, multipleStatements.tail)
-          case _ => nextToken(token, context, multipleStatements)
-        }
-      case _ => Failure[Tokens]
-    }
-  
-    
-    private def isNewlineAllowedBefore(token : ScalaToken) = (!xml 
-        && multipleStatements.head 
-        &&  canEndStatement(last) 
-        && canStartStatement(token))
-        
-    private def nextNewline = nl(input) match {
-      case Success(token, context) => nextToken(token, context, multipleStatements)
-      case _ => Failure[Tokens]
-    }
-    
-    private def nextToken(token : ScalaToken, context : Context, multipleStatements : List[Boolean]) = 
-      Success(token, new Tokens(context, index + 1, if (multipleStatements == Nil) true :: Nil else multipleStatements, xml, token))
+     lazy val next = nextToken(state)(input) match {
+       case Success(state, context) => Success(state.token, new Tokens(context, index + 1, state))
+       case _ => Failure[Tokens]
+     }
 
     override def toString = input toString
   }
   
-  def tokens(input : Context) = new Tokens(input, 0, true :: Nil, false, null)
-
-   
+  def tokens(input : Context) = new Tokens(input, 0, TokenState(null, Nil))
 
   val decimalDigit = ('0' to '9') ^^ (_ - 48L)
   def decimal(n : Long) = decimalDigit ^^ (n * 10 + _)
@@ -253,30 +159,6 @@ abstract class ScalaScanner extends Scanner {
       | floatLiteral 
       | doubleLiteral)
     
-      /*
-  val statementStart : Rule[ScalaToken] = (space | comment *) -~ (
-      '(' -^ OpenRound
-      | '{' -^ OpenCurly
-      | literal
-      | reservedId.filter(_.canStartStatement)
-      | id)
-      
-  val statementPart : Rule[ScalaToken] = (nl | space | comment *) -~ (
-      ';' -^ Semicolon
-      | '.' -^ Dot
-      | ',' -^ Comma
-      | ')' -^ CloseRound
-      | '[' -^ OpenSquare
-      | ']' -^ CloseSquare
-      | '}' -^ CloseCurly
-      | reservedId.filter(!_.canStartStatement))
-      
-      */
-        
-  val tokenAhead = (nl-?) ~- (nl*) ~ token
-  
-  val token : Rule[ScalaToken] = (space | comment *) -~ (delimiter | literal | reservedId | id)
-      
   val xmlNameStart = (elem('_')
       | unicode(LOWERCASE_LETTER) // Ll
       | unicode(UPPERCASE_LETTER) // Lu
@@ -295,7 +177,7 @@ abstract class ScalaScanner extends Scanner {
       
   val xmlS = choice(" \t\r\n")+
     
-  val xmlComment = "<!--" -~ anyChar *~- "-->"
+  val xmlComment = "<!--" -~ anyChar *~- "-->" -^ XMLComment
     
   val char1 = anyChar - choice("<&")
   
@@ -320,8 +202,21 @@ abstract class ScalaScanner extends Scanner {
   
   val attribute = attributeName ~ attributeValue
   lazy val element : Rule[Any] = startElement ~ (attribute*) ~ (emptyElement | elementContent ~ xmlContent ~- endElement)
-  lazy val xmlContent = element | comment | charData | reference // | scalExpr  | cdataSect | pi 
+  lazy val xmlContent = element | xmlComment | charData | reference // | scalExpr  | cdataSect | pi 
     
+  def startXML(lastToken : ScalaToken) = lastToken match {
+    case OpenRound | OpenCurly | Newline => startElement
+    case _ => (space*) -~ startElement
+  }
+  
+  val token : Rule[ScalaToken] = (newline | space | comment *) -~ (delimiter | literal | reservedId | id)
+  
+  def nlToken(state : TokenState) = nl ~- (token.filter(state.isNewlineAllowedBefore) &)
+      
+  def nextToken(state : TokenState) = (nlToken(state) | token) ^^ state.next
+
+  
+  
   /*
 
 XmlExpr ::= XmlContent {Element}
