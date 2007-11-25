@@ -12,10 +12,12 @@ trait ArithmeticEvaluator extends IncrementalScanner {
 }
   
 object ExampleUsage extends ArithmeticEvaluator with Application {
-  val document = new EditableDocument[Char]
+  type Context = DefaultIncrementalInput
+  
+  val document = new DefaultDocument
   val input = document.first
   
-  document.debug = true
+  IncrementalInput.debug = true
   
   // set up initial text and evaluate
   document.edit(0, 0, "7 + 5 * (5+ 6 / 2 - 1)")

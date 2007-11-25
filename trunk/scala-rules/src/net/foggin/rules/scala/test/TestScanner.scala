@@ -1,29 +1,50 @@
 package net.foggin.rules.scala.test
 
 trait TestScanner extends Scanner with Application {
-  type Context = ArrayInput[Char]
+
+  def input(string : String) : Context
   
-  def check[A](input : String, actual : Result[A], expected : Result[A]) {
-    (expected, actual) match {
-      case (Success(ea, es), Success(aa, as)) if ea == aa && es.toString == as.toString => ()
-      case (e, a) if e == a => ()
-      case _ => error ("Input: " + input + 
-        "\nExpected result: " + expected + 
+  def checkSuccess[A](input : String, result : Result[A], expected : A) {
+    result match {
+      case Success(actual, rest) if actual == expected => ()
+      case actual => fail(input, actual, expected, "")
+    }
+  }
+  
+  def check[A](input : String, actual : Result[A], expected : A, rest : String) {
+    actual match {
+      case Success(ea, es) => if (ea != expected && !es.toString.equals(rest)) 
+        fail(input, actual, expected, rest)
+      case _ => fail(input, actual, expected, rest)
+    }
+  }
+  
+  def fail[A](input : String, actual : Result[A], expected : A, rest : String) {
+    error ("Input: " + input + 
+      "\nExpected result: " + expected + 
+      "\nWith remaining input: \"" + rest + "\"" +
+      "\nActual result: " + actual)    
+  }
+  
+  def checkFailure[A](rule : Rule[A])(inputs : String *) {
+    for (string <- inputs) {
+      val actual = rule(input(string))
+      if (actual.isSuccess) error ("Input: " + string + 
+        "\nExpected Failure" + 
         "\nActual result: " + actual)
     }
   }
   
-  def checkFailure[A](rule : Rule[A])(input : String *) {
-    for (i <- input) check(i, rule(i), Failure[Context])
+  def checkRule[A](rule : Rule[A])(expect : (String, A) *) {
+    for ((string, result) <- expect) {
+      checkSuccess(string, rule(input(string)), result)
+    }
   }
   
-  def checkRule[A](rule : Rule[A])(expect : (String, Result[A]) *) {
-    for ((input, result) <- expect) check(input, rule(input), result)
+  def checkRuleWithRest[A](rule : Rule[A])(expect : ((String, A), String) *) {
+    for (((string, result), rest) <- expect) {
+      check(string, rule(input(string)), result, rest)
+    }
   }
-  
-  implicit def anyToSuccess[A](a : A) : Result[A] = Success(a, "")
-  
-  implicit def tripleToSuccess[A](triple : ((String, A), String)) : (String, Result[A]) = 
-    triple match { case ((input, a), rest) => input -> Success(a, rest) }
 }
 

@@ -3,7 +3,7 @@ package net.foggin.rules
 trait Input[+A, Context <: Input[A, Context]] extends Iterable[A] { self : Context =>
 
   def next : Result[A, Context]
-  def index : Int
+  //def index : Int
 
   def elements = new Iterator[A] {
     private var input : Context = Input.this
