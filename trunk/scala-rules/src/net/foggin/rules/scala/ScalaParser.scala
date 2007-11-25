@@ -447,10 +447,10 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   
   val charData = ("{{" -^ '{' | reference | char1 - ("]]>" | '{') +) ^^ toString ^^ TextNode
   
-  lazy val xmlElement = '<' -~ xmlName >> { name => (attribute*) ~- (xmlS?) >> xmlElementRest(name) }
+  lazy val xmlElement = '<' -~ xmlName ~ (attribute*) ~- (xmlS?) >~> xmlElementRest
   
-  def xmlElementRest(name : String)(attributes : List[Attribute]) : Rule[XMLElement] = ("/>" -^ None
-      | (xmlContent  ^^ Some[Expression]) ~- endElement(name)) ^^ XMLElement(name, attributes)
+  def xmlElementRest(name : String, attributes : List[Attribute]) : Rule[XMLElement] = ("/>" -^ None
+      | '>' -~ (xmlContent  ^^ Some[Expression]) ~- endElement(name)) ^^ XMLElement(name, attributes)
       
   def endElement(name : String) = ("</" -~ xmlName ~- (xmlS?) ~- '>') filter (_ == name)
   
@@ -559,7 +559,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val xmlPattern = token("xmlPattern", '<' -~ xmlName ~- (xmlS?) >> xmlPatternRest, { t : Any => true })
   
   def xmlPatternRest(name : String) : Rule[XMLPattern] = ("/>" -^ None
-      | xmlPatternContent ~- endElement(name)) ^^ XMLPattern(name)
+      | '>' -~ xmlPatternContent ~- endElement(name)) ^^ XMLPattern(name)
       
   lazy val xmlPatternContent = (xmlPattern | xmlComment | charData | scalaPattern *) ^^ NodeList ^^ Some[Expression]  // | cdataSect | pi 
 
