@@ -3,7 +3,7 @@ package net.foggin.rules.scala;
 trait Statement
 trait Expression extends Statement
 
-abstract class Literal extends Expression
+sealed abstract class Literal extends Expression
 
 case object Null extends Literal
 case object True extends Literal
@@ -25,13 +25,12 @@ case class Super(classQualifier : Option[String]) extends PathElement with Expre
 case class Name(id : String) extends PathElement with Expression
 
 case object Underscore extends Expression
-//case object UnderscoreRepeated extends Expression
-//case class Literal(token : LiteralToken) extends Expression
 case class TupleExpression(exprs : List[Expression]) extends Expression
 case class DotExpression(expr1 : Expression, expr2 : PathElement) extends Expression
 case class ExpressionTypeArgs(expr : Expression, typeArgs : List[Type]) extends Expression
 case class ApplyExpression(expr : Expression, args : List[Expression]) extends Expression
 case class Unapplied(expr : Expression) extends Expression
+case class InstanceCreation(template : Expression) extends Expression
 
 case class SimpleAssignment(id : String, value : Expression) extends Expression
 case class DotAssignment(expr : Expression, id : String, value : Expression) extends Expression
@@ -78,6 +77,12 @@ case class TypedVariablePattern(id : String, typeSpec : Type) extends Expression
 case class TypePattern(typeSpec : Type) extends Expression
 case class OrPattern(patterns : List[Expression]) extends Expression
 
+case class NodeList(nodes : List[Expression]) extends Expression
+case class TextNode(text : String) extends Expression
+case class XMLComment(ext : String) extends Expression
+case class XMLElement(name : String, attributes : List[Attribute], content : Option[Expression]) extends Expression
+case class Attribute(name : String, value : Expression)
+
 
 abstract class Type
 case class FunctionType(parameterTypes : List[ParameterType], resultType : Type) extends Type
@@ -89,8 +94,8 @@ case class AnnotatedType(annotations : List[Annotation], annotated : Type) exten
 case class SingletonType(path : List[PathElement]) extends Type
 case class TypeDesignator(path : List[PathElement], id : String) extends Type
 case class TupleType(types : Seq[Type]) extends Type
-case class TypeProjection(simpleType : Type, id : String) extends Type
-case class ParameterizedType(simpleType : Type, typeArgs : Seq[Type]) extends Type
+case class TypeProjection(simpleType : Type)(id : String) extends Type
+case class ParameterizedType(simpleType : Type)(typeArgs : Seq[Type]) extends Type
 
 abstract class Annotation
 
@@ -202,7 +207,7 @@ case class ClassTemplate(
     parent : Option[Type], 
     arguments : List[List[Expression]], 
     otherParents : List[Type], 
-    templateBody : Option[TemplateBody])
+    templateBody : Option[TemplateBody]) extends Expression
     
 case class CaseObjectDefinition(objectDef : ObjectDefinition) extends Definition
 
@@ -218,7 +223,7 @@ case class TraitTemplate(
     parents : List[Type], 
     templateBody : Option[TemplateBody])
     
-case class TemplateBody(alias : Option[String], selfType : Option[Type], statements : List[Statement])
+case class TemplateBody(alias : Option[String], selfType : Option[Type], statements : List[Statement]) extends Expression
 
 case class AnnotatedDeclaration(annotations : List[Annotation], modifiers : List[Modifier], declaration : Declaration) extends Statement
 case class AnnotatedDefinition(annotations : List[Annotation], modifiers : List[Modifier], definition : Definition) extends Statement

@@ -1,11 +1,9 @@
 package net.foggin.rules.scala.test;
 
-object TestIncrementalScalaParser extends ScalaParser with Application {
-  type Context = IncrementalScalaInput
+object TestIncrementalScalaParser extends ScalaParser[DefaultIncrementalInput] with Application {
   
   val document = new DefaultDocument
-  
-  def input = new IncrementalScalaInput(document.first)
+  def input = new ScalaInput(document.first)
   
   IncrementalInput.debug = true
 

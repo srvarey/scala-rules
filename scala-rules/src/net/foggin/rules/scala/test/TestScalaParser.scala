@@ -1,5 +1,6 @@
 package net.foggin.rules.scala.test
 
+/*
 class TestParserInput[T <: Input[Char, T]](input : T) 
     extends ScalaInput[TestParserInput[T]] 
     with Input[Char, TestParserInput[T]] {
@@ -43,17 +44,19 @@ class TestParserInput[T <: Input[Char, T]](input : T)
   override def toString = input.toString
 }
 
-object TestScalaParser extends ScalaParser with TestScanner {
+*/
+
+object TestScalaParser extends ScalaParser[DefaultIncrementalInput] with TestScanner {
   //type Context = TestParserInput[ArrayInput[Char]]
   
   //def input(string : String) = new TestParserInput(new ArrayInput[Char](string.toArray))
   
-  type Context = IncrementalScalaInput
+  //type Context = IncrementalScalaInput
   
   def input(string : String) = {
     val document = new DefaultDocument
     document.edit(0, 0, string)
-    new IncrementalScalaInput(document.first)
+    new ScalaInput(document.first)
   }
   
   checkRule('this)("this" -> "this")
@@ -66,9 +69,7 @@ checkRule(typeSpec)(
     "A.type" -> SingletonType(List(Name("A"))),
     "(A, \nB)" -> TupleType(List(TypeDesignator(Nil, "A"), TypeDesignator(Nil, "B"))),
     "(A, )" -> TupleType(List(TypeDesignator(Nil, "A"))),
-    "A#B[C, D]" -> ParameterizedType(
-        TypeProjection(TypeDesignator(Nil, "A"), "B"), 
-        List(TypeDesignator(Nil, "C"), TypeDesignator(Nil, "D"))),
+    "A#B[C, D]" -> ParameterizedType(TypeProjection(TypeDesignator(Nil, "A"))("B"))(List(TypeDesignator(Nil, "C"), TypeDesignator(Nil, "D"))),
     "A with B" -> CompoundType(TypeDesignator(Nil, "A"))(TypeDesignator(Nil, "B")),
    "A => B" -> FunctionType(List(ParameterType(false, TypeDesignator(Nil, "A"), false)), TypeDesignator(Nil, "B")),
    "() => B" -> FunctionType(List(), TypeDesignator(List(), "B")),
@@ -160,9 +161,41 @@ checkRule(typeSpec)(
           
           "-1" -> PrefixExpression("-", IntegerLiteral(1)),
           
-          "a _" -> Unapplied(Name("a"))
-         
+          "a _" -> Unapplied(Name("a")),
+          
+          "new X" -> InstanceCreation(ClassTemplate(None,Some(TypeDesignator(List(), "X")),List(),List(),None)),
+          
+          "new Y(1, 2) { val y = 3 }" -> InstanceCreation(ClassTemplate(
+              None,
+              Some(TypeDesignator(List(),"Y")),
+              List(List(IntegerLiteral(1), IntegerLiteral(2))),
+              List(),
+              Some(TemplateBody(None, None,
+                  List(AnnotatedDefinition(List(),List(),ValPatternDefinition(List(VariablePattern("y")),None,IntegerLiteral(3)))))))),
+                  
+          """a match {
+            case x : A
+                if x == b =>
+                    x
+            case _ => b
+          }""" -> MatchExpression(Name("a"),CaseClauses(List(
+              CaseClause(TypedVariablePattern("x",TypeDesignator(List(), "A")),
+                  Some(InfixExpression("==",Name("x"),Name("b"))),
+                  Block(List(),Some(Name("x")))), 
+              CaseClause(Underscore,None,Block(List(),Some(Name("b")))))))
      )
+
+     checkRule(xmlExpr)(
+         "<foo bar='123' baz={456}><!--comment-->Some text{\"Hello XML\"}<empty/>&lt;notelement&gt;</foo>" -> NodeList(List(
+             XMLElement("foo", List(
+                 Attribute("bar",StringLiteral("123")), 
+                 Attribute("baz",IntegerLiteral(456))),
+                 Some(NodeList(List(
+                     XMLComment("comment"), 
+                     TextNode("Some text"), 
+                     StringLiteral("Hello XML"), 
+                     XMLElement("empty",List(),None),
+                     TextNode("<notelement>"))))))))
      
      checkRule(pattern)(
          "_" -> Underscore,

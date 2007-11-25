@@ -13,17 +13,24 @@ trait TestScanner extends Scanner with Application {
   
   def check[A](input : String, actual : Result[A], expected : A, rest : String) {
     actual match {
-      case Success(ea, es) => if (ea != expected && !es.toString.equals(rest)) 
+      case Success(ea, es) => if (ea != expected && !es.mkString("").equals(rest)) 
         fail(input, actual, expected, rest)
       case _ => fail(input, actual, expected, rest)
     }
   }
   
   def fail[A](input : String, actual : Result[A], expected : A, rest : String) {
-    error ("Input: " + input + 
-      "\nExpected result: " + expected + 
-      "\nWith remaining input: \"" + rest + "\"" +
-      "\nActual result: " + actual)    
+    actual match {
+      case Success(result, s) =>  error ("Input: " + input + 
+        "\nExpected success: " + expected + 
+        "\nWith remaining input: \"" + rest + "\"" +
+        "\n\nActual success value: " + result +
+        "\nWith remaining input: \"" + s.mkString("") + "\"") 
+      case _ => error ("Input: " + input + 
+        "\nExpected success: " + expected + 
+          "\nWith remaining input: \"" + rest + "\"" +
+          "\n\nActual result: " + actual)
+    }
   }
   
   def checkFailure[A](rule : Rule[A])(inputs : String *) {

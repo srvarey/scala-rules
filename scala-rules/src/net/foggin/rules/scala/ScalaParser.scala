@@ -2,21 +2,6 @@ package net.foggin.rules.scala
 
 import Character._
 
-case class ParserState(multipleStatementsAllowed : Boolean, lastTokenCanEndStatement : Boolean) 
-
-trait ScalaInput[Context <: Input[Char, Context]] 
-    extends Input[Char, Context] 
-    with Memoisable[Context] { 
-  
-  self : Context =>
-
-  def lastTokenCanEndStatement : Boolean
-  def lastTokenCanEndStatement_=(value : Boolean) : Context
-  
-  def multipleStatementsAllowed : Boolean
-  def multipleStatementsAllowed_=(allow : Boolean)  : Context
-}
-
 object ScalaParser {
   
   val reserved = _root_.scala.collection.immutable.Set(
@@ -30,9 +15,12 @@ object ScalaParser {
   val endStatements = _root_.scala.collection.immutable.Set(
       "this", "null", "true", "false", "return", "type", "_")
     
-  /** Reserved ids that cannot start a statement */
+  /** Reserved ids that cannot start a statement 
+   *
+   * Note: "case" cannot start statement unless followed by "class" or "object" 
+   */
   val cannotStartStatements = _root_.scala.collection.immutable.Set(
-      "catch", "else", "extends", "finally", "forSome", "match", "requires", "with", "yield",
+      "case", "catch", "else", "extends", "finally", "forSome", "match", "requires", "with", "yield",
       "_", ":", "=", "=>", "<-", "<:", "<%", ">:", "#", "\u21D2")
 
   def isReserved(id : String) = reserved.contains(id)
@@ -50,8 +38,8 @@ import ScalaParser._
   *
   * @author Andrew Foggin, based on Scala Language Specification
  */
-abstract class ScalaParser extends Scanner with MemoisableRules {
-  type Context <: ScalaInput[Context]
+abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scanner with MemoisableRules {
+  type Context = ScalaInput[T]
   
   implicit def symbolToId(symbol : Symbol) : Rule[String] = idToken(symbol.name)
    
@@ -60,7 +48,7 @@ abstract class ScalaParser extends Scanner with MemoisableRules {
   
   val space = choice(" \t")
   
-  lazy val startStatement = (space | comment | newline *) ~- (choice("({") | literal | id | reservedId.filter(canStartStatement))
+  lazy val startStatement = (space | comment | newline *) ~- (choice("({") | literal | id | reservedId.filter(canStartStatement) | 'case ~ ('class | 'object))
   
   lazy val nl = memo("nl", multipleStatementsAllowed -~ lastTokenCanEndStatement -~
     (space | comment *) -~ newline ~- (startStatement &))
@@ -201,7 +189,7 @@ abstract class ScalaParser extends Scanner with MemoisableRules {
       | unicode(TITLECASE_LETTER) //Lt
       | unicode(LETTER_NUMBER)) // Nl
       
-  val xmlNameChar = (xmlNameStart | choice(".-")
+  val xmlNameChar = (xmlNameStart | choice(":.-")
       | unicode(COMBINING_SPACING_MARK) // Mc
       | unicode(ENCLOSING_MARK) // Me
       | unicode(NON_SPACING_MARK) // Mn
@@ -212,7 +200,7 @@ abstract class ScalaParser extends Scanner with MemoisableRules {
       
   val xmlS = choice(" \t\r\n")+
     
-  val xmlComment = "<!--" -~ anyChar *~- "-->"
+  val xmlComment = "<!--" -~ anyChar *~- "-->" ^^ toString ^^ XMLComment
     
   val char1 = anyChar - choice("<&")
   
@@ -223,27 +211,23 @@ abstract class ScalaParser extends Scanner with MemoisableRules {
       | "&quot;" -^ '"')
     
   val attributeName = xmlS -~ xmlName ~- '='
-  val attributeValue = ('"' -~ (char1 | reference) *~- '"' 
-      | '\'' -~ (char1 | reference) *~- '\'') ^^ toString
-      // | scalaExpr
-      
+  val attributeValue : Rule[Expression] = quoted('"') | quoted('\'') | scalaExpr
+  def quoted(ch : Char) = ch -~ (char1 | reference) *~- ch ^^ toString ^^ StringLiteral
+  val scalaExpr = '{' -~ singleStatement(expr) ~- delim('}')
   
   val startElement = '<' -~ xmlName
   val endElement = "</" -~ xmlName ~- (xmlS?) ~- '>'
   val emptyElement = (xmlS?) ~- "/>"
   val elementContent = (xmlS?) ~- '>'
     
-  val charData = ("{{" -^ '{' | char1 - ("]]>" | '{') +)
+  val charData = ("{{" -^ '{' | reference | char1 - ("]]>" | '{') +) ^^ toString ^^ TextNode
   
-  val attribute = attributeName ~ attributeValue
-  lazy val element : Rule[Any] = startElement ~ (attribute*) ~ (emptyElement | elementContent ~ xmlContent ~- endElement)
-  lazy val xmlContent = element | xmlComment | charData | reference // | scalExpr  | cdataSect | pi 
+  val attribute = attributeName ~ attributeValue ^~^ Attribute
+  lazy val element : Rule[XMLElement] = startElement ~ (attribute*) ~ (
+      emptyElement -^ None
+      | elementContent -~ (xmlContent ^^ Some[Expression]) ~- endElement) ^~~^ XMLElement
+  lazy val xmlContent : Rule[Expression] = (element | xmlComment | charData | scalaExpr *) ^^ NodeList // | cdataSect | pi 
     
-  //def startXML(lastToken : ScalaToken) = lastToken match {
-  //  case OpenRound | OpenCurly | Newline => startElement
-  //  case _ => (space*) -~ startElement
-  //}
-  
   def idToken(string : String) : Rule[String] = (plainId | reservedId) filter (_ == string)
   
   def round[T](rule : Rule[T]) = delim('(') -~ singleStatement(rule) ~- delim(')')
@@ -343,12 +327,9 @@ abstract class ScalaParser extends Scanner with MemoisableRules {
       | round(types ~- (comma?)) ^^ TupleType) >> typeArgsOrProjection
       
   def typeArgsOrProjection(simpleType : Type) : Rule[Type] = (
-      parameterizedType(simpleType) >> typeArgsOrProjection
-      | projection(simpleType) >> typeArgsOrProjection
+      (typeArgs ^^ ParameterizedType(simpleType)) >> typeArgsOrProjection
+      | `#` -~ (id ^^ TypeProjection(simpleType)) >> typeArgsOrProjection
       | success(simpleType))
-      
-  def parameterizedType(simpleType : Type) = square(types) ^^ (ParameterizedType(simpleType, _))
-  def projection(simpleType : Type) = `#` -~ id ^^ (TypeProjection(simpleType, _))
       
   /** TypeArgs ::= ‘[’ Types ‘]’ */
   lazy val typeArgs = square(types)
@@ -446,8 +427,8 @@ abstract class ScalaParser extends Scanner with MemoisableRules {
    *     | BlockExpr
    *     | SimpleExpr1 [‘_’] */
   lazy val simpleExpr = (
-      //"new" ~ (classTemplate | templateBody)
-      blockExpr
+      'new -~ (classTemplate | templateBody) ^^ InstanceCreation
+      | blockExpr
       | simpleExpr1 ~- `_` ^^ Unapplied
       | simpleExpr1)
 
@@ -475,8 +456,7 @@ abstract class ScalaParser extends Scanner with MemoisableRules {
       | (argumentExprs ^^ (ApplyExpression(expr, _))) >> simpleExpr1Rest
       | success(expr))
       
-  // NB XmlExpr is not in the syntax summary of SLS 2.6.0
-  lazy val xmlExpr = failure
+  lazy val xmlExpr = (element+) ^^ NodeList
 
   lazy val tupleExpr = round(exprs ~- (comma?) | success(Nil)) ^^ TupleExpression
   
@@ -526,8 +506,11 @@ abstract class ScalaParser extends Scanner with MemoisableRules {
   /** CaseClauses ::= CaseClause { CaseClause } */
   lazy val caseClauses = (caseClause+) ^^ CaseClauses
 
-  /** CaseClause ::= case Pattern [Guard] ‘=>’ Block */
-  lazy val caseClause = 'case -~ pattern ~ (guard?) ~- `=>` ~ block ^~~^ CaseClause
+  /** CaseClause ::= case Pattern [Guard] ‘=>’ Block 
+   *
+   * Note multiple statements disallowed between "case" and matching "=>"
+   */
+  lazy val caseClause = 'case -~ singleStatement(pattern ~ (guard?)) ~- `=>` ~ block ^~~^ CaseClause
 
   /** Guard ::= ‘if’ PostfixExpr */
   lazy val guard = 'if -~ postfixExpr
