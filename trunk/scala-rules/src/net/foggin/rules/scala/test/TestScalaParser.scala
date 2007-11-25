@@ -182,20 +182,19 @@ checkRule(typeSpec)(
               CaseClause(TypedVariablePattern("x",TypeDesignator(List(), "A")),
                   Some(InfixExpression("==",Name("x"),Name("b"))),
                   Block(List(),Some(Name("x")))), 
-              CaseClause(Underscore,None,Block(List(),Some(Name("b")))))))
-     )
+              CaseClause(Underscore,None,Block(List(),Some(Name("b"))))))),
 
-     checkRule(xmlExpr)(
          "<foo bar='123' baz={456}><!--comment-->Some text{\"Hello XML\"}<empty/>&lt;notelement&gt;</foo>" -> NodeList(List(
              XMLElement("foo", List(
                  Attribute("bar",StringLiteral("123")), 
-                 Attribute("baz",IntegerLiteral(456))),
+                 Attribute("baz",IntegerLiteral(456))))(
                  Some(NodeList(List(
                      XMLComment("comment"), 
                      TextNode("Some text"), 
                      StringLiteral("Hello XML"), 
-                     XMLElement("empty",List(),None),
-                     TextNode("<notelement>"))))))))
+                     XMLElement("empty",List())(None),
+                     TextNode("<notelement>")))))))
+         )
      
      checkRule(pattern)(
          "_" -> Underscore,

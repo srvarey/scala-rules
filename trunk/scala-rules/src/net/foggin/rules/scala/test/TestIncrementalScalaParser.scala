@@ -17,6 +17,11 @@ object TestIncrementalScalaParser extends ScalaParser[DefaultIncrementalInput] w
     println(tokens(input).mkString(", "))
   }
 
+  def printCompilationUnit() {
+    println; println("Compilation Unit: ")
+    println(compilationUnit(input))
+  }
+  
   def printLines() {
     println; println("Lines: ")
     println(lines(input).mkString("\n"))
@@ -32,17 +37,20 @@ object TestIncrementalScalaParser extends ScalaParser[DefaultIncrementalInput] w
     }
     """)
 
-  printTokens()
-  printLines()
+  //printTokens()
+  //printLines()
+  printCompilationUnit()
 
  // insert something
  document.edit(19, 0, """
    class Dummy {
+     val question = <element with="attribute">and some text</element>
      val answer = 42
    }
    """)
 
-  printTokens()
-  printLines()
+   //printTokens()
+   //printLines()
+   printCompilationUnit()
 } 
 
