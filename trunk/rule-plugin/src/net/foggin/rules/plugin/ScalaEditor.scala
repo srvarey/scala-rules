@@ -5,16 +5,16 @@ import org.eclipse.ui.editors.text._
 
 class ScalaEditor extends TextEditor {
 
-  val scanner = new PluginScanner
+  val parser = new PluginParser
   
   setSourceViewerConfiguration(new SourceViewerConfiguration() {
-    override def getPresentationReconciler(sourceViewer : ISourceViewer) = scanner.reconciler(sourceViewer)
+    override def getPresentationReconciler(sourceViewer : ISourceViewer) = parser.reconciler(sourceViewer)
   })
   
   setDocumentProvider(new FileDocumentProvider())
   
   override def dispose() {
-    scanner.dispose()
+    parser.dispose()
     super.dispose()
   }
 }

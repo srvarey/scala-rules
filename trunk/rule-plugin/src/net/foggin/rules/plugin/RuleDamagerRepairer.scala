@@ -27,7 +27,9 @@ case class StyleToken(val start : Int, val end : Int, val attribute : TextAttrib
   }
 }
 
-class PluginScanner extends scala.ScalaScanner with IncrementalScanner {
+class PluginParser extends scala.ScalaParser {
+  type Context = scala.IncrementalScalaInput
+  
   private val colours = new _root_.scala.collection.mutable.HashMap[RGB, Color]
 
   def colour(rgb: RGB) = colours.getOrElseUpdate(rgb, new Color(Display.getCurrent(), rgb))
@@ -39,7 +41,7 @@ class PluginScanner extends scala.ScalaScanner with IncrementalScanner {
   val COMMENT = new TextAttribute(colour(new RGB(128, 128, 255)), null, SWT.ITALIC)
   
   def style(rule : Rule[Any], attribute : TextAttribute) = {
-    for (_ <- whitespace; start <- context; _ <- rule; end <- context) yield StyleToken(start.index, end.index, attribute)
+    for (_ <- whitespace; start <- context; _ <- rule; end <- context) yield StyleToken(start.input.index, end.input.index, attribute)
   }
   
   val commentToken = style(comment, COMMENT)
@@ -51,23 +53,25 @@ class PluginScanner extends scala.ScalaScanner with IncrementalScanner {
   val styleTokens = view(styleToken) _
 
   def reconciler(sourceViewer : ISourceViewer) = new PresentationReconciler() {
-    val dr = new RuleDamagerRepairer(PluginScanner.this)
+    val dr = new RuleDamagerRepairer(PluginParser.this)
     setDamager(dr, IDocument.DEFAULT_CONTENT_TYPE)
     setRepairer(dr, IDocument.DEFAULT_CONTENT_TYPE)
   }
 }
 
 // TODO: Implement a custom PresentationReconciler instead.
-class RuleDamagerRepairer(scanner : PluginScanner) 
+class RuleDamagerRepairer(parser : PluginParser) 
     extends IPresentationDamager with IPresentationRepairer with IDocumentListener {
 
   private var document : IDocument = null
-  private var input : EditableDocument[Char] = null
+  private var scalaDocument : DefaultDocument = null
+  private var input : scala.IncrementalScalaInput = null
+
 
   // @see IDocumentListener
   def documentAboutToBeChanged(event : DocumentEvent) = {
       // We have to apply the change here because 'getDamageRegion' can be called more than once for each event :-(
-      input.edit(event.getOffset, event.getLength, event.getText)
+      scalaDocument.edit(event.getOffset, event.getLength, event.getText)
   }
 
   // @see IDocumentListener
@@ -78,8 +82,9 @@ class RuleDamagerRepairer(scanner : PluginScanner)
     if (document ne this.document) {
       if (this.document ne null) this.document.removeDocumentListener(this)
       this.document = document;
-      input = new EditableDocument[Char]
-      input.edit(0, 0, document.get)
+      scalaDocument = new DefaultDocument
+      scalaDocument.edit(0, 0, document.get)
+      input = new scala.IncrementalScalaInput(scalaDocument.first)
       document.addDocumentListener(this)
     }
   }
@@ -92,6 +97,6 @@ class RuleDamagerRepairer(scanner : PluginScanner)
         
   // @see IPresentationRepairer
   def createPresentation(presentation : TextPresentation, region : ITypedRegion) {
-    for (t <- scanner.styleTokens(input.first)) t.addToPresentation(presentation)
+    for (t <- parser.styleTokens(input)) t.addToPresentation(presentation)
   }
 }
