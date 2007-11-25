@@ -81,7 +81,10 @@ class Rule[S, +A](f : S => Result[A, S]) extends (S => Result[A, S])
   }
   
   /** Repeats this rule one or more times with a separator (which is discarded) */
-  def ~+~(sep : Rule[S, Any]) = this ~++ (sep -~ this *)
+  def +/(sep : Rule[S, Any]) = this ~++ (sep -~ this *)
+
+  /** Repeats this rule zero or more times with a separator (which is discarded) */
+  def */(sep : Rule[S, Any]) = +/(sep) | unit(Nil)
 
   /** Creates a rule that suceeds only if this rule would fail on the given context. */
   def unary_! = for (s <- Rule.get[S] if !apply(s).isSuccess) yield s
