@@ -80,8 +80,10 @@ case class OrPattern(patterns : List[Expression]) extends Expression
 case class NodeList(nodes : List[Expression]) extends Expression
 case class TextNode(text : String) extends Expression
 case class XMLComment(ext : String) extends Expression
-case class XMLElement(name : String, attributes : List[Attribute], content : Option[Expression]) extends Expression
+case class XMLElement(name : String, attributes : List[Attribute])(content : Option[Expression]) extends Expression
 case class Attribute(name : String, value : Expression)
+
+case class XMLPattern(name : String)(content : Option[Expression]) extends Expression
 
 
 abstract class Type
