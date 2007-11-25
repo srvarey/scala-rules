@@ -133,5 +133,13 @@ class Rule[S, +A](f : S => Result[A, S]) extends (S => Result[A, S])
   /** Creates a rule that always succeeds with a Boolean value.  
    *  Value is 'true' if this rule succeeds, 'false' otherwise */
   def -? : Rule[S, Boolean] = map { any => true } | unit(false)
+      
+  /** >~>(f) is equivalent to >> { case b1 ~ b2 => f(b1, b2) } 
+   */
+  def >~>[B1, B2, B >: A <% B1 ~ B2, C](f : (B1, B2) => Rule[S, C]) = flatMap { a =>
+    (a : B1 ~ B2) match { case b1 ~ b2 => f(b1, b2) } 
+  }
+  
+
 
 }
