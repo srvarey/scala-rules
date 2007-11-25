@@ -49,6 +49,9 @@ trait Rules {
   def select[A](rules : Collection[Rule[A]]) : Rule[A] =
     rules.reduceLeft[Rule[A]](_ | _)
 
+  def read[A](f : Context => A) = Rule.read(f)
+  
+  def update(f : Context => Context) = Rule.update(f)
 
   
 }

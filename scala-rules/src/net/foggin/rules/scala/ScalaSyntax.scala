@@ -3,6 +3,21 @@ package net.foggin.rules.scala;
 trait Statement
 trait Expression extends Statement
 
+abstract class Literal extends Expression
+
+case object Null extends Literal
+case object True extends Literal
+case object False extends Literal
+
+case class CharacterLiteral(char : Char) extends Literal
+case class StringLiteral(string : String) extends Literal
+case class SymbolLiteral(symbol : Symbol) extends Literal
+case class IntegerLiteral(value : Int) extends Literal
+case class LongLiteral(value : Long) extends Literal
+case class FloatLiteral(value : Float) extends Literal
+case class DoubleLiteral(value : Double) extends Literal
+
+
 abstract class PathElement extends Expression
 
 case object This extends PathElement with Expression
