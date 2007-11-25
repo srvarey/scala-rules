@@ -27,9 +27,8 @@ case class StyleToken(val start : Int, val end : Int, val attribute : TextAttrib
   }
 }
 
-class PluginParser extends scala.ScalaParser {
-  type Context = scala.IncrementalScalaInput
-  
+class PluginParser extends scala.ScalaParser[DefaultIncrementalInput] {
+
   private val colours = new _root_.scala.collection.mutable.HashMap[RGB, Color]
 
   def colour(rgb: RGB) = colours.getOrElseUpdate(rgb, new Color(Display.getCurrent(), rgb))
@@ -65,7 +64,6 @@ class RuleDamagerRepairer(parser : PluginParser)
 
   private var document : IDocument = null
   private var scalaDocument : DefaultDocument = null
-  private var input : scala.IncrementalScalaInput = null
 
 
   // @see IDocumentListener
@@ -84,7 +82,6 @@ class RuleDamagerRepairer(parser : PluginParser)
       this.document = document;
       scalaDocument = new DefaultDocument
       scalaDocument.edit(0, 0, document.get)
-      input = new scala.IncrementalScalaInput(scalaDocument.first)
       document.addDocumentListener(this)
     }
   }
@@ -97,6 +94,7 @@ class RuleDamagerRepairer(parser : PluginParser)
         
   // @see IPresentationRepairer
   def createPresentation(presentation : TextPresentation, region : ITypedRegion) {
+    val input = new scala.ScalaInput(scalaDocument.first)
     for (t <- parser.styleTokens(input)) t.addToPresentation(presentation)
   }
 }
