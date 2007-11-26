@@ -24,11 +24,17 @@ checkRule(typeSpec)(
     "(A, \nB)" -> TupleType(List(TypeDesignator(Nil, "A"), TypeDesignator(Nil, "B"))),
     "(A, )" -> TupleType(List(TypeDesignator(Nil, "A"))),
     "A#B[C, D]" -> ParameterizedType(TypeProjection(TypeDesignator(Nil, "A"))("B"))(List(TypeDesignator(Nil, "C"), TypeDesignator(Nil, "D"))),
-    "A with B" -> CompoundType(TypeDesignator(Nil, "A"))(TypeDesignator(Nil, "B")),
+    "A with B" -> CompoundType(TypeDesignator(Nil, "A"), List(TypeDesignator(Nil, "B")), None),
    "A => B" -> FunctionType(List(ParameterType(false, TypeDesignator(Nil, "A"), false)), TypeDesignator(Nil, "B")),
    "() => B" -> FunctionType(List(), TypeDesignator(List(), "B")),
     "(=> A, B*) => C" -> FunctionType(List(ParameterType(true, TypeDesignator(Nil, "A"), false), ParameterType(false, TypeDesignator(Nil, "B"), true)), TypeDesignator(Nil, "C")),
-    "A B C" -> InfixType(TypeDesignator(Nil, "A"))("B", TypeDesignator(Nil, "C"))
+    "A B C" -> InfixType(TypeDesignator(Nil, "A"), "B", TypeDesignator(Nil, "C")),
+    "A -: B -: C" -> InfixType(TypeDesignator(List(), "A"), "-:" , 
+        InfixType(TypeDesignator(List(), "B"), "-:",TypeDesignator(List(), "C"))),
+    "A @annot" -> AnnotatedType(TypeDesignator(List(), "A"), List(Annotation(TypeDesignator(List(), "annot"), List(), List()))),
+    
+    """A @annot("Yo!") { val name = "Fred" }""" -> AnnotatedType(TypeDesignator(List(), "A"), List(
+        Annotation(TypeDesignator(List(), "annot"), List(List(StringLiteral("Yo!"))), List(("name", StringLiteral("Fred"))))))
  )
  
  checkRule(dcl)(
