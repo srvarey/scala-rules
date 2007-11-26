@@ -30,6 +30,9 @@ trait Rules {
   /** Creates a Rule that always succeeds with the specified value. */
   def success[A](a : A) = Rule.unit[Context, A](a)
   
+  lazy val nil = success(Nil)
+  lazy val none = success(None)
+  
   /** Primitive rule that always suceeds and returns the context with which it is called. */
   lazy val context = Rule.get[Context]
   
