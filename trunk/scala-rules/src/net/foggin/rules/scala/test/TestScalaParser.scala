@@ -1,51 +1,5 @@
 package net.foggin.rules.scala.test
 
-/*
-class TestParserInput[T <: Input[Char, T]](input : T) 
-    extends ScalaInput[TestParserInput[T]] 
-    with Input[Char, TestParserInput[T]] {
-  
-  lazy val _next = input.next match {
-    case Success(ch, input) => Success(ch, new TestParserInput(input))
-    case _ => Failure[TestParserInput[T]]
-  }
-  
-  lazy val next = _next match {
-    case s @ Success(ch, input) => 
-      input._lastTokenCanEndStatement = _lastTokenCanEndStatement
-      input._multipleStatementsAllowed = _multipleStatementsAllowed
-      s
-    case f => f
-  }
-  
-  var _lastTokenCanEndStatement = false
-  var _multipleStatementsAllowed = true
-
-  def lastTokenCanEndStatement = _lastTokenCanEndStatement
-  def multipleStatementsAllowed = _multipleStatementsAllowed
-  
-  def lastTokenCanEndStatement_=(value : Boolean) = { _lastTokenCanEndStatement = value; this }
-  def multipleStatementsAllowed_=(value : Boolean) =  { _multipleStatementsAllowed = value; this }
-  
-  private val map = new _root_.scala.collection.mutable.HashMap[AnyRef, Result[Any, TestParserInput[T]]]
-
-  def memo[B](key : AnyRef, f : TestParserInput[T] => Result[B, TestParserInput[T]]) : Result[B, TestParserInput[T]] = {
-    val statefulKey = (key, lastTokenCanEndStatement && multipleStatementsAllowed)
-    map.getOrElseUpdate(statefulKey, {
-      val result = f(this)
-      result match {
-        case Success(value, element) => println(statefulKey + " -> " + value)
-        case _ =>
-      }
-      result
-    }).asInstanceOf[Result[B, TestParserInput[T]]]
-  }
-
-  override def toString = input.toString
-}
-
-*/
-
 object TestScalaParser extends ScalaParser[DefaultIncrementalInput] with TestScanner {
   //type Context = TestParserInput[ArrayInput[Char]]
   
@@ -268,9 +222,7 @@ checkRule(typeSpec)(
       "1f" -> FloatLiteral(1), 
       "1.0F" -> FloatLiteral(1), 
       "1.e2F" -> FloatLiteral(100),
-      ".12E3f" -> FloatLiteral(.12E3f))
-
-  checkRule(doubleLiteral)(
+      ".12E3f" -> FloatLiteral(.12E3f),
       "1D" -> DoubleLiteral(1), 
       "1.0" -> DoubleLiteral(1), 
       "1e2" -> DoubleLiteral(100),
