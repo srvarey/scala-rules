@@ -25,9 +25,11 @@ object Rule {
 class Rule[S, +A](f : S => Result[A, S]) extends (S => Result[A, S])
     with MonadPlus[A, Rule.SM[S]#M] {
   
+  import Rule.{ unit => _, _ }
+  
   val companion = new MonadCompanion[Rule.SM[S]#M] {
     def unit[A](a : => A) = Rule.unit[S, A](a)
-    override def zero = Rule.failure[S]
+    override def zero = failure[S]
   }
   import companion._
   
@@ -51,6 +53,9 @@ class Rule[S, +A](f : S => Result[A, S]) extends (S => Result[A, S])
   def -^[B](b : B) = map { any => b }
  
   def >>[B](f : A => Rule[S, B]) = flatMap(f)
+  
+  /** Recursive application */
+  def >>>[B >: A <% S, C](nested : Rule[S, C]) = >> { s => nested ~- update { any => s } }
   
   def >>?[B](pf : PartialFunction[A, Rule[S, B]]) = >> { a => if (pf.isDefinedAt(a)) pf(a) else zero }
   
