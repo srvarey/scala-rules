@@ -20,6 +20,8 @@ object Rule {
   def read[S, A](f : S => A) = apply { s : S => Success(f(s), s) }
   
   def update[S](f : S => S) = apply { s : S => Success(s, f(s)) }
+  
+  def reset[S](s : S) = apply { any : S => Success(s, s) }
 }
   
 class Rule[S, +A](f : S => Result[A, S]) extends (S => Result[A, S])
@@ -55,7 +57,7 @@ class Rule[S, +A](f : S => Result[A, S]) extends (S => Result[A, S])
   def >>[B](f : A => Rule[S, B]) = flatMap(f)
   
   /** Recursive application */
-  def >>>[B >: A <% S, C](nested : Rule[S, C]) = >> { s => nested ~- update { any => s } }
+  def >>>[B >: A <% S, C](r : Rule[S, C]) = for ( s <- this;  _ <- reset[S](s); c <- r) yield c
   
   def >>?[B](pf : PartialFunction[A, Rule[S, B]]) = >> { a => if (pf.isDefinedAt(a)) pf(a) else zero }
   
@@ -94,11 +96,11 @@ class Rule[S, +A](f : S => Result[A, S]) extends (S => Result[A, S])
   /** Creates a rule that suceeds only if this rule would fail on the given context. */
   def unary_! = for (s <- Rule.get[S] if !apply(s).isSuccess) yield s
        
-  /** Creates a rule that suceeds if this rule would succeed but returns an unmodified context. 
+  /** Creates a rule that does not modify the state even if it succeeds 
    *
    * N.B. can't be prefix operator - according to Scala syntax only '+', '-', '~' and '!' can be prefix. 
    */
-  def & = for (s <- Rule.get[S] if apply(s).isSuccess) yield s
+  def & = for (s <- get[S]; a <- this; _ <- reset(s)) yield a
   
   def -(exclude : => Rule[S, Any]) = !exclude -~ this
     

@@ -289,7 +289,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | 'return -~ (expr?) ^^ Return
       | assignment
       | postfixExpr ~- `:` ~ compoundType ^~^ TypedExpression
-      | postfixExpr ~- `:` ~ (annotation*) ^~^ AnnotatedExpression
+      | postfixExpr ~- `:` ~ (annotation+) ^~^ AnnotatedExpression
       | postfixExpr ~- `:` ~- `_` ~- `*` ^^ VarArgExpression
       | postfixExpr ~- 'match ~ curly(caseClauses) ^~^ MatchExpression
       | postfixExpr)
@@ -336,8 +336,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   /** SimpleExpr ::= new (ClassTemplate | TemplateBody)
    *     | BlockExpr
    *     | SimpleExpr1 [‘_’] */
-  lazy val simpleExpr = (
-      'new -~ (classTemplate | templateBody) ^^ InstanceCreation
+  lazy val simpleExpr = ('new -~ (classTemplate | templateBody) ^^ InstanceCreation
       | blockExpr
       | simpleExpr1 ~- `_` ^^ Unapplied
       | simpleExpr1)
