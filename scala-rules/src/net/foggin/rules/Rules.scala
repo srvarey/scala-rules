@@ -22,11 +22,6 @@ trait Rules {
   /** Converts a function into a rule. */
   implicit def createRule[A](f : Context => Result[A]) = Rule(f)
 	  
-  /** Converts a PartialFunction into a Rule. */
-  implicit def partialFunctionToRule[A](pf : PartialFunction[Context, (A, Context)]) = createRule[A] {
-    pf andThen { case (a, ctx) => Success(a, ctx) } orElse { case ctx => Failure[Context] }
-  }
-
   /** Creates a Rule that always succeeds with the specified value. */
   def success[A](a : A) = Rule.unit[Context, A](a)
   
