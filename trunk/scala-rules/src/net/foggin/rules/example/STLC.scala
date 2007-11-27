@@ -16,6 +16,7 @@ case class App(function : Term, arg : Term) extends Term
 
 class BindingRules[T] extends Rules {
   type Context = _root_.scala.collection.immutable.Map[Name, T]
+  val empty : Context = _root_.scala.collection.immutable.Map.empty[Name, T]
   
   def bind(name : Name, value : T) = createRule { ctx => Success(value, ctx(name) = value) }
   def boundValue(name : Name) = createRule { ctx => if (ctx.contains(name)) Success(ctx(name), ctx) else Failure[Context] }
@@ -30,4 +31,30 @@ class Typer extends BindingRules[Type] {
       case FunctionType(from, to) ~ argType if (from == argType) => success(to)
     }
   }
+}
+
+
+object TestTyper extends Typer with Application {
+
+  def check(pairs : (Term, Type)*) {
+    for ((term, expected) <- pairs) typeOf(term)(empty) match {
+      case Success(actual, _) => if (actual != expected) error("Term: " + term + 
+          "\nExpected type: " + expected +
+          "\nActual type: " + actual)
+      case _ => error("Term: " + term + 
+          "\nExpected type: " + expected +
+          "\nDid not typecheck")
+    }
+  }
+  
+  val fx = Function(Name("x"), BooleanType, Variable(Name("x")))
+  
+  check(
+      True -> BooleanType,
+      False -> BooleanType,
+      fx -> FunctionType(BooleanType, BooleanType),
+      App(fx, True) -> BooleanType
+      )
+  
+  println("STLC Typer tests passed")
 }
