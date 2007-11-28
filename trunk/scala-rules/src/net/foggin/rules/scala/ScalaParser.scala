@@ -57,7 +57,12 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   
   val space = choice(" \t")
   
-  lazy val startStatement = (space | comment | newline *) ~- (choice("({") | literal | id | reservedId.filter(canStartStatement) | 'case ~ ('class | 'object))
+  lazy val startStatement = (space | comment | newline *) ~- (
+      choice("({") 
+      | literal 
+      | id 
+      | reservedId.filter(canStartStatement) 
+      | 'case ~ ('class | 'object))
   
   lazy val nl = memo("nl", multipleStatementsAllowed 
       -~ lastTokenCanEndStatement 
@@ -157,6 +162,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
 
   val floatLiteral = intPart ~ floatPart ~ exponentPart ~ (choice("FfDd")?) >> {
     case "" ~ "" ~ _ ~ _ => failure
+    case "" ~ "." ~ _ ~ _ => failure
     case _ ~ "" ~ "" ~ None => failure
     case i ~ f ~ e ~ Some('F' | 'f') => success(FloatLiteral((i + f + e).toFloat))
     case i ~ f ~ e ~ _ => success(DoubleLiteral((i + f + e).toDouble))
