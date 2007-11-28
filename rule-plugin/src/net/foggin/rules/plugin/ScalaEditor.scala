@@ -8,7 +8,7 @@ class ScalaEditor extends TextEditor {
   val parser = new PluginParser
   
   setSourceViewerConfiguration(new SourceViewerConfiguration() {
-    override def getPresentationReconciler(sourceViewer : ISourceViewer) = parser.reconciler(sourceViewer)
+    override def getPresentationReconciler(sourceViewer : ISourceViewer) = new ScalaPresentationReconciler(parser)
   })
   
   setDocumentProvider(new FileDocumentProvider())
