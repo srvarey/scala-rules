@@ -51,7 +51,7 @@ case class PostfixExpression(expr : Expression, id : String) extends Expression
 case class InfixExpression(id : String, left : Expression, right : Expression) extends Expression
 case class PrefixExpression(id : String, expr : Expression) extends Expression
 
-case class Block(statements : List[Statement], resultExpr : Option[Expression]) extends Expression
+case class Block(statements : List[Statement]) extends Expression
 
 case class CaseClause(pattern : Expression, guard : Option[Expression], block : Block)
 case class CaseClauses(clauses : List[CaseClause]) extends Expression
@@ -71,11 +71,10 @@ case class VarArgExpression(expr : Expression) extends Expression
 
 case class VariablePattern(id : String) extends Expression
 case class StableIdPattern(path : List[PathElement], args : Option[List[Expression]], varArgs : Boolean) extends Expression
-case class InfixPattern(left : Expression, rest : List[(String, Expression)]) extends Expression
 case class AtPattern(id : String, pattern : Expression) extends Expression
 case class TypedVariablePattern(id : String, typeSpec : Type) extends Expression
 case class TypePattern(typeSpec : Type) extends Expression
-case class OrPattern(patterns : List[Expression]) extends Expression
+case class OrPattern(pattern : Expression, orPattern : Expression) extends Expression
 
 case class NodeList(nodes : List[Expression]) extends Expression
 case class TextNode(text : String) extends Expression

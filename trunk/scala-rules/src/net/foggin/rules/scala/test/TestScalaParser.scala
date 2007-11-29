@@ -97,11 +97,11 @@ checkRule(typeSpec)(
          "return" -> Return(None),
          
          "try { 1 } catch { case e => println(e) } finally { println(\"finally!\") }" -> TryCatchFinally(
-             Block(List(),Some(IntegerLiteral(1))),
+             Block(List(IntegerLiteral(1))),
              Some(CaseClauses(List(
                  CaseClause(VariablePattern("e"), None, Block(
-                     List(), Some(ApplyExpression(Name("println"), List(Name("e"))))))))),
-             Some(Block(List(), Some(ApplyExpression(Name("println"),List(StringLiteral("finally!"))))))),
+                     List(ApplyExpression(Name("println"), List(Name("e"))))))))),
+             Some(Block(List(ApplyExpression(Name("println"),List(StringLiteral("finally!"))))))),
              
           "for (i <- list; val j = i; if true) yield j" -> ForComprehension(List(
               Generator(VariablePattern("i"), Name("list"), None), 
@@ -141,8 +141,8 @@ checkRule(typeSpec)(
           }""" -> MatchExpression(Name("a"),CaseClauses(List(
               CaseClause(TypedVariablePattern("x",TypeDesignator(List(), "A")),
                   Some(InfixExpression("==",Name("x"),Name("b"))),
-                  Block(List(),Some(Name("x")))), 
-              CaseClause(Underscore,None,Block(List(),Some(Name("b"))))))),
+                  Block(List(Name("x")))), 
+              CaseClause(Underscore,None,Block(List(Name("b"))))))),
 
          "<foo bar='123' baz={456}><!--comment-->Some text{\"Hello XML\"}<empty/>&lt;notelement&gt;</foo>" -> NodeList(List(
              XMLElement("foo", List(
@@ -165,11 +165,11 @@ checkRule(typeSpec)(
          "X(a, b)" -> StableIdPattern(List(Name("X")), Some(List(VariablePattern("a"), VariablePattern("b"))),false),
          "X(_*)" -> StableIdPattern(List(Name("X")), Some(List()), true),
          "(x, y)" -> TupleExpression(List(VariablePattern("x"), VariablePattern("y"))),
-         "a ~ b" -> InfixPattern(VariablePattern("a"),List(("~",VariablePattern("b")))),
+         "a ~ b" -> InfixExpression("~", VariablePattern("a"), VariablePattern("b")),
          "a @ (x, y)" -> AtPattern("a",TupleExpression(List(VariablePattern("x"), VariablePattern("y")))),
          "a : A" -> TypedVariablePattern("a", TypeDesignator(List(), "A")),
          "_ : A" -> TypePattern(TypeDesignator(List(), "A")),
-         "1 | 2" -> OrPattern(List(IntegerLiteral(1), IntegerLiteral(2)))
+         "1 | 2" -> OrPattern(IntegerLiteral(1), IntegerLiteral(2))
      )
      
   checkRule(compilationUnit)("""
@@ -184,8 +184,7 @@ checkRule(typeSpec)(
             ClassParamClauses(List(),None),
             ClassTemplate(None,None,List(),List(),Some(TemplateBody(None,None,List(
                 AnnotatedDefinition(List(),List(),ProcedureDefinition("hello",None,List(List()),None,
-                    Block(List(),Some(
-                        ApplyExpression(Name("println"),List(StringLiteral("Hello World"))))))))))))))))
+                    Block(List(ApplyExpression(Name("println"),List(StringLiteral("Hello World"))))))))))))))))
     
   
   checkRule(unicodeEscape)("\\u0030" -> '0', "\\u21D2" -> '\u21D2')

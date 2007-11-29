@@ -262,29 +262,8 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val typeArgs = square(types)
   lazy val types = typeSpec+/comma
 
-  /** Expr ::= (Bindings | id) ‘=>’ Expr
-   *     | Expr1 */
-  lazy val expr : Rule[Expression] = (
-      (bindings | id ^^ { id => List(Binding(id, None)) }) ~- `=>` ~ expr ^~^ FunctionExpression
-      | expr1)
+  lazy val expr : Rule[Expression] = (bindings | untypedIdBinding) ~- `=>` ~ expr ^~^ FunctionExpression | expr1
 
-  /** Expr1 ::= if ‘(’ Expr ‘)’ {nl} Expr [[semi] else Expr]
-   *     | while ‘(’ Expr ‘)’ {nl} Expr
-   *     | try ‘{’ Block ‘}’ [catch ‘{’ CaseClauses ‘}’] [finally Expr]
-   *     | do Expr [semi] while ‘(’ Expr ’)’
-   *     | for (‘(’ Enumerators ‘)’ | ‘{’ Enumerators ‘}’) {nl} [yield] Expr
-   *     | throw Expr
-   *     | return [Expr]
-   *     | [SimpleExpr ‘.’] id ‘=’ Expr
-   *     | SimpleExpr1 ArgumentExprs ‘=’ Expr
-   *     | PostfixExpr
-   *     | PostfixExpr Ascription
-   *     | PostfixExpr match ‘{’ CaseClauses ‘}’ 
-   *
-   *  Ascription ::= ‘:’ CompoundType
-   *     | ‘:’ Annotation {Annotation}
-   *     | ‘:’ ‘_’ ‘*’ 
-   */
   lazy val expr1 : Rule[Expression] = (
       'if -~ round(expr) ~- (nl*) ~ expr ~ ((semi?) -~ 'else -~ expr ?) ^~~^ IfExpression
       | 'while -~ round(expr)  ~- (nl*) ~ expr ^~^ WhileExpression
@@ -311,18 +290,17 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   /** InfixExpr ::= PrefixExpr | InfixExpr id [nl] InfixExpr */
   lazy val infixExpr = infix(operators)
   
-  def infix(operators : List[Rule[String]]) : Rule[Expression] = {
-    val head :: tail = operators
+  def infix(operators : List[Rule[(Expression, Expression) => Expression]]) : Rule[Expression] = {
+    val op :: tail = operators
     val next = if (tail == Nil) prefixExpr else infix(tail)
-    val op : Rule[(Expression, Expression) => Expression] = head ^^ { id => InfixExpression(id, _, _) }
     next ~*~ op
   }
   
-  def infixId(test : Char => Boolean) : Rule[String] = id filter { string => test(string.charAt(0)) }
   def infixId(choices : String) : Rule[String] = id filter { string => choices contains (string.charAt(0)) }
+  def infixOp(rule : Rule[String]) : Rule[(Expression, Expression) => Expression] = rule ~- (nl?) ^^ { id => InfixExpression(id, _, _) }
       
   /** Infix operators in list from lowest to highest precedence */
-  lazy val operators : List[Rule[String]] = List(
+  lazy val operators : List[Rule[(Expression, Expression) => Expression]] = List[Rule[String]](
       infixId("_$") | id filter(_.charAt(0).isLetter),
       infixId("|"),
       infixId("^"),
@@ -332,34 +310,21 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       infixId(":"),
       infixId("+-"),
       infixId("*%/"),
-      id filter { string => 
+      otherOp) map infixOp
+      
+  lazy val otherOp = id filter { string => 
         val first = string.charAt(0)
         !first.isLetter && !"_$|^&<>=!:+-*%/".contains(first)
-      })
+  }
 
   lazy val prefixExpr = (plus | minus | bang | tilde) ~ simpleExpr ^~^ PrefixExpression | simpleExpr
 
-  /** SimpleExpr ::= new (ClassTemplate | TemplateBody)
-   *     | BlockExpr
-   *     | SimpleExpr1 [‘_’] */
   lazy val simpleExpr = ('new -~ (classTemplate | templateBody) ^^ InstanceCreation
       | blockExpr
       | simpleExpr1 ~- `_` ^^ Unapplied
       | simpleExpr1)
 
-  /** SimpleExpr1 ::= Literal
-   *     | Path
-   *     | ‘_’
-   *     | ‘(’ [Exprs [‘,’]] ‘)’
-   *     | SimpleExpr ‘.’ id
-   *     | SimpleExpr TypeArgs
-   *     | SimpleExpr1 ArgumentExprs
-   *     | XmlExpr 
-   *
-   * Note left-recursive definition above.  
-   */
-  lazy val simpleExpr1 : Rule[Expression] = (
-      `_` -^ Underscore
+  lazy val simpleExpr1 : Rule[Expression] = (`_` -^ Underscore
       | literal
       | xmlExpr
       | pathElement
@@ -389,89 +354,46 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val exprs = expr +/comma
   lazy val argumentExprs = round(exprs ~- (comma?) | nil) | (nl?) -~ blockExpr ^^ (List(_))
 
-  /** BlockExpr ::= ‘{’ CaseClauses ‘}’ | ‘{’ Block ‘}’ */
   lazy val blockExpr : Rule[Expression] = curly(caseClauses | block)
-
-  /** Block ::= {BlockStat semi} [ResultExpr] */
-  lazy val block : Rule[Block] = (blockStat ~- semi *) ~ (resultExpr?) ^~^ Block
- 
-  /** BlockStat ::= Import
-   *     | [implicit] Def
-   *     | {LocalModifier} TmplDef
-   *     | Expr1
-   */
+  lazy val block : Rule[Block] = ((blockStat ~- semi *) ~ resultExpr ^^ { case s ~ r => s ::: r :: Nil } | nil) ^^ Block
   lazy val blockStat  : Rule[Statement] = (importStat
       | 'implicit -~ definition ^^ ImplicitDefinition
       | definition
       | nil ~ (localModifier*) ~ tmplDef ^~~^ AnnotatedDefinition // TODO: check - shouldn't annotations be allowed?
       | expr1)
 
-  /** ResultExpr ::= Expr1 | (Bindings | id ‘:’ CompoundType) ‘=>’ Block */
-  lazy val resultExpr = ((bindings | singleIdBinding ) ~- `=>` ~ block ^~^ FunctionExpression
-      | expr1)
-
-  lazy val singleIdBinding = id ~- `:` ~ compoundType ^^ { case id ~ typeSpec => List(Binding(id, Some(typeSpec))) }
+  lazy val resultExpr = (bindings | singleIdBinding ) ~- `=>` ~ block ^~^ FunctionExpression | expr1
+  lazy val bindings = round(binding +/comma)
+  lazy val binding = id ~ (`:` -~ typeSpec ?) ^~^ Binding
+  lazy val singleIdBinding = id ~ (`:` -~ compoundType ?) ^~^ Binding ^^ { List(_) }
+  lazy val untypedIdBinding = id ~ none ^~^ Binding ^^ { List(_) }
   
-  /** Enumerators ::= Generator {semi Enumerator} */
   lazy val enumerators = generator ~++ (semi -~ enumerator *)
-
-  /** Enumerator ::= Generator
-   *     | Guard
-   *     | val Pattern1 ‘=’ Expr */
-  lazy val enumerator : Rule[Enumerator] = (
-      generator 
+  lazy val generator = pattern1 ~- `<-` ~ expr ~ (guard?) ^~~^ Generator
+  lazy val enumerator : Rule[Enumerator] = (generator 
       | guard ^^ Guard 
       | ('val -~ pattern1 ~- `=`) ~ expr ^~^ ValEnumerator)
-
-  /** Generator ::= Pattern1 ‘<-’ Expr [Guard] */
-  lazy val generator = pattern1 ~- `<-` ~ expr ~ (guard?) ^~~^ Generator
-
-  /** CaseClauses ::= CaseClause { CaseClause } */
-  lazy val caseClauses = (caseClause+) ^^ CaseClauses
-
-  /** CaseClause ::= case Pattern [Guard] ‘=>’ Block 
-   *
-   * Note multiple statements disallowed between "case" and matching "=>"
-   */
-  lazy val caseClause = 'case -~ singleStatement(pattern ~ (guard?)) ~- `=>` ~ block ^~~^ CaseClause
-
-  /** Guard ::= ‘if’ PostfixExpr */
   lazy val guard = 'if -~ postfixExpr
 
-  /** Pattern ::= Pattern1 { ‘|’ Pattern1 } */
-  lazy val pattern = (pattern1 ~++ (`|` -~ pattern1 +)  ^^ OrPattern
-      | pattern1)
+  lazy val caseClauses = (caseClause+) ^^ CaseClauses
+  lazy val caseClause = 'case -~ singleStatement(pattern ~ (guard?)) ~- `=>` ~ block ^~~^ CaseClause
 
-  /** Pattern1 ::= varid ‘:’ TypePat
-   *     | ‘_’ ‘:’ TypePat
-   *     | Pattern2 */
-  lazy val pattern1 = (
-    varId ~- `:` ~ typeSpec ^~^ TypedVariablePattern
-    | `_` -~ `:` -~ typeSpec ^^ TypePattern
-    | pattern2)
-
-  /** Pattern2 ::= varid [‘@’ Pattern3]
-   *     | Pattern3 */
-  lazy val pattern2 = (
-      (varId ~- `@` ~ pattern3) ^~^ AtPattern
+  lazy val pattern = pattern1 ~*~ (`|` -^ OrPattern _)
+  lazy val pattern1 = (varId ~- `:` ~ typeSpec ^~^ TypedVariablePattern
+      | `_` -~ `:` -~ typeSpec ^^ TypePattern
+      | pattern2)
+  lazy val pattern2 = ((varId ~- `@` ~ pattern3) ^~^ AtPattern
       | pattern3)
 
-  /** Pattern3 ::= SimplePattern | SimplePattern { id [nl] SimplePattern } */
-  lazy val pattern3 : Rule[Expression] = (
-      simplePattern ~ (((id - `|`) ~- (nl?) ~ simplePattern ^^ { case a ~ b => (a, b) })+) ^~^ InfixPattern
-      | simplePattern)
-
-  /** SimplePattern ::= ‘_’
-   *     | varid
-   *     | Literal
-   *     | StableId
-   *     | StableId ‘(’ [Patterns [‘,’]] ‘)’
-   *     | StableId ‘(’ [Patterns ‘,’] ‘_’ ‘*’ ‘)’
-   *     | ‘(’ [Patterns [‘,’]] ‘)’
-   *     | XmlPattern
-   */
-  lazy val simplePattern : Rule[Expression] = (
-      `_` -^ Underscore
+  lazy val pattern3 : Rule[Expression] = infixPattern(operators)
+      
+  def infixPattern(operators : List[Rule[(Expression, Expression) => Expression]]) : Rule[Expression] = {
+    val op :: tail = operators
+    val next = if (tail == Nil) simplePattern else infixPattern(tail)
+    next ~*~ (op - `|`)
+  }
+ 
+  lazy val simplePattern : Rule[Expression] = (`_` -^ Underscore
       | varId ~- !dot ^^ VariablePattern
       | literal
       | xmlPattern
@@ -536,12 +458,6 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
 
   lazy val classParamModifiers = ((modifier*) ~- 'val ^^ ValParameterModifiers 
       | (modifier*) ~- 'var ^^ VarParameterModifiers)
-
-  /** Bindings ::= ‘(’ Binding {‘,’ Binding ‘)’ */
-  lazy val bindings = round(binding +/comma)
-
-  /** Binding ::= id [‘:’ Type] */
-  lazy val binding = id ~ (`:` -~ typeSpec ?) ^~^ Binding
 
   /** Modifier ::= LocalModifier
    *     | AccessModifier
