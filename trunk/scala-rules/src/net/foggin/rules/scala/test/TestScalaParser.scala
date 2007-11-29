@@ -180,7 +180,7 @@ checkRule(typeSpec)(
         println("Hello World")
       }
     }""" -> CompilationUnit(Some(List("a", "b")), List(
-        AnnotatedDefinition(List(),List(),ClassDefinition("Hello",None,List(),None,
+        AnnotatedDefinition(List(),List(),ClassDefinition(false, "Hello",None,List(),None,
             ClassParamClauses(List(),None),
             ClassTemplate(None,None,List(),List(),Some(TemplateBody(None,None,List(
                 AnnotatedDefinition(List(),List(),ProcedureDefinition("hello",None,List(List()),None,
