@@ -1,10 +1,11 @@
 package net.foggin.rules.scala
 
 import Character._
+import  _root_.scala.collection.immutable.Set
 
 object ScalaParser {
   
-  val reserved = _root_.scala.collection.immutable.Set(
+  val reserved = Set(
       "abstract", "case", "catch", "class", "def", "do", "else", "extends", "false", "final",
       "finally", "for", "forSome", "if", "implicit", "import", "lazy", "match", "new", "null", "object",
       "override", "package", "private", "protected", "requires", "return", "sealed", "super", "this", 
@@ -12,14 +13,14 @@ object ScalaParser {
       "_", ":", "=", "=>", "<-", "<:", "<%", ">:", "#", "@", "\u21D2")
 
   /** Reserved ids that can terminate a statement */
-  val endStatements = _root_.scala.collection.immutable.Set(
+  val endStatements = Set(
       "this", "null", "true", "false", "return", "type", "_")
     
   /** Reserved ids that cannot start a statement 
    *
    * Note: "case" cannot start statement unless followed by "class" or "object" 
    */
-  val cannotStartStatements = _root_.scala.collection.immutable.Set(
+  val cannotStartStatements = Set(
       "case", "catch", "else", "extends", "finally", "forSome", "match", "requires", "with", "yield",
       "_", ":", "=", "=>", "<-", "<:", "<%", ">:", "#", "\u21D2")
 
@@ -207,8 +208,6 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   val xmlComment = "<!--" -~ anyChar *~- "-->" ^^ toString ^^ XMLComment
   val reference = "&amp;" -^ '&' | "&lt;" -^ '<' | "&gt;" -^ '>' | "&apos;" -^ '\'' | "&quot;" -^ '"'
     
-  def statements[T](rule : Rule[T]) = curly(rule +/semi)
- 
   val qualId = id+/dot
   val ids = id+/comma
     
@@ -224,7 +223,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   })
   
   lazy val typeSpec : Rule[Type] = functionType | existentialType | infixType
-  lazy val existentialType = infixType ~- 'forSome ~ statements(typeDcl | valDcl) ^~^ ExistentialType
+  lazy val existentialType = infixType ~- 'forSome ~ curly((typeDcl | valDcl)+/semi) ^~^ ExistentialType
   lazy val functionType = (functionParameters | simpleFunctionParameter) ~- `=>` ~ typeSpec ^~^ FunctionType
   lazy val functionParameters = round(parameterType*/comma).filter(checkParamTypes)
   lazy val simpleFunctionParameter = infixType ^^ { t => List(ParameterType(false, t, false)) }
@@ -245,7 +244,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val compoundType : Rule[Type] = (refinement 
       | annotType ~- !('with | refinement) 
       | annotType ~ ('with -~ annotType *) ~ (refinement?) ^~~^ CompoundType)
-  lazy val refinement : Rule[Refinement] = (nl?) -~ statements(dcl | typeDef) ^^ Refinement
+  lazy val refinement : Rule[Refinement] = (nl?) -~ curly((dcl | typeDef)*/semi) ^^ Refinement
   
   // TODO: report issue with AnnotType definition in syntax summary
   lazy val annotType = simpleType ~ (annotation+) ^~^ AnnotatedType | simpleType
@@ -403,55 +402,27 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | round(patterns ~- (comma?)) ^^ TupleExpression)
 
   lazy val xmlPattern = token("xmlPattern", '<' -~ xmlName ~- (xmlS?) >> xmlPatternRest, { t : Any => true })
-  
   def xmlPatternRest(name : String) : Rule[XMLPattern] = ("/>" -^ None
       | '>' -~ xmlPatternContent ~- endElement(name)) ^^ XMLPattern(name)
-      
   lazy val xmlPatternContent = (xmlPattern | xmlComment | charData | scalaPattern *) ^^ NodeList ^^ Some[Expression]  // | cdataSect | pi 
-
   lazy val scalaPattern = '{' -~ singleStatement(patterns ^^ TupleExpression) ~- delim('}')
 
   /** Patterns ::= Pattern [‘,’ Patterns] | ‘_’ ‘*’  */
   lazy val patterns = (pattern +/comma | success(Nil))
 
-  /** TypeParamClause ::= ‘[’ VariantTypeParam {‘,’ VariantTypeParam} ‘]’ */
-  lazy val typeParamClause = square(variantTypeParam +/comma)
+  lazy val typeParamClause = square(variantTypeParam+/comma)
+  lazy val funTypeParamClause = square(typeParam+/comma)
 
-  /** FunTypeParamClause::= ‘[’ TypeParam {‘,’ TypeParam} ‘]’ */
-  lazy val funTypeParamClause = square(typeParam +/comma)
-
-  lazy val variance = (plus -^ Covariant
-      | minus -^ Contravariant
-      | success(Invariant))
-  
-  /** VariantTypeParam ::= [‘+’ | ‘-’] TypeParam */
+  lazy val variance = plus -^ Covariant | minus -^ Contravariant | success(Invariant)
   lazy val variantTypeParam = variance ~ typeParam ^~^ VariantTypeParameter
-
-  /** TypeParam ::= id [>: Type] [<: Type] [<% Type] */
   lazy val typeParam = id ~ (`>:` -~ typeSpec ?) ~ (`<:` -~ typeSpec ?) ~ (`<%` -~ typeSpec ?) ^~~~^ TypeParameter
 
-  /** ParamClause ::= [nl] ‘(’ [Params] ’)’ */
-  lazy val paramClause = (nl?) -~ round(optParams)
-
-  lazy val optParams = params | success(Nil)
-  
-  /** Params ::= Param {‘,’ Param} */
-  lazy val params = param +/comma
-
-  /** Param ::= {Annotation} id [‘:’ ParamType] */
+  lazy val paramClause = (nl?) -~ round(param*/comma)
   lazy val param = (annotation*) ~ id ~ (paramType?) ^~~^ Parameter
-
-  /** ParamType ::= Type | ‘=>’ Type | Type ‘*’ */
   lazy val paramType = `:` -~ (`=>`-?) ~ typeSpec ~ (`*`-?) ^~~^ ParameterType
 
-  /** ClassParamClauses ::= {ClassParamClause} [[nl] ‘(’ implicit ClassParams ‘)’] */
-  lazy val classParamClauses = (classParamClause*) ~ ((nl?) -~ round('implicit -~ classParams) ?) ^~^ ClassParamClauses
-
-  /** ClassParamClause ::= [nl] ‘(’ [ClassParams] ’)’ */
-  lazy val classParamClause = (nl?) -~ round(classParams | success(Nil))
-
-  /** ClassParams ::= ClassParam {‘’ ClassParam} */
-  lazy val classParams = classParam +/comma
+  lazy val classParamClauses = (classParamClause*) ~ ((nl?) -~ round('implicit -~ (classParam+/comma)) ?) ^~^ ClassParamClauses
+  lazy val classParamClause = (nl?) -~ round(classParam*/comma)
 
   /** ClassParam ::= {Annotation} [{Modifier} (‘val’ | ‘var’)] id [‘:’ ParamType] */
   lazy val classParam = (annotation*) ~ (classParamModifiers?) ~ id ~ (paramType ?) ^~~~^ ClassParameter
@@ -459,29 +430,14 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val classParamModifiers = ((modifier*) ~- 'val ^^ ValParameterModifiers 
       | (modifier*) ~- 'var ^^ VarParameterModifiers)
 
-  /** Modifier ::= LocalModifier
-   *     | AccessModifier
-   *     | override 
-   */
   lazy val modifier : Rule[Modifier] = localModifier | accessModifier | 'override -^ Override
-
-  /** LocalModifier ::= abstract
-   *     | final
-   *     | sealed
-   *     | implicit
-   *     | lazy 
-   */
   lazy val localModifier : Rule[Modifier]  = ('abstract -^ Abstract
       | 'final -^ Final
       | 'sealed -^ Sealed
       | 'implicit -^ Implicit
       | 'lazy -^ Lazy)
-
-  /** AccessModifier ::= (private | protected) [AccessQualifier] */
   lazy val accessModifier : Rule[Modifier] = ('private -~ (accessQualifier?) ^^ Private
       | 'protected-~ (accessQualifier?) ^^ Protected) 
-
-  /** AccessQualifier ::= ‘[’ (id | this) ‘]’ */
   lazy val accessQualifier = square(id ^^ Name | 'this -^ This)
 
   lazy val annotation : Rule[Annotation] = `@` -~ annotationExpr ~- (nl?)
@@ -489,7 +445,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val nameValuePair = 'val -~ id ~- `=` ~ prefixExpr ^~^ Pair[String, Expression]
 
   /** TemplateBody ::= [nl] ‘{’ [id [‘:’ Type] ‘=>’] TemplateStat {semi TemplateStat} ‘}’ */
-  lazy val templateBody = (nl?) -~ curly(selfType ~- (nl*) ~ (templateStat +/semi)) ^~~^ TemplateBody
+  lazy val templateBody = (nl?) -~ curly(selfType ~- (nl*) ~ (templateStat+/semi)) ^~~^ TemplateBody
 
   lazy val selfType = ((id ^^ Some[String]) ~ (`:` -~ typeSpec ?)  ~- `=>`
       | ('this -^ None) ~ (`:` -~ typeSpec ^^ Some[Type]) ~- `=>` 
@@ -526,15 +482,6 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val importSelector = id ~ (`=>` -~ (id | `_`) ?) ^~^ ImportSelector
   lazy val wildcardImportSelector = `_` -^ ImportSelector("_", None)
 
-  /** Dcl ::= val ValDcl
-   *     | var VarDcl
-   *     | def FunDcl
-   *     | type {nl} TypeDcl
-   * ValDcl ::= ids ‘:’ Type
-   * VarDcl ::= ids ‘:’ Type
-   * FunDcl ::= FunSig [‘:’ Type]
-   * TypeDcl ::= id [TypeParamClause] [‘>:’ Type] [‘<:’ Type] 
-   */
   lazy val dcl = (valDcl | varDcl | funDcl | typeDcl)
   lazy val valDcl = 'val -~ ids ~- `:` ~ typeSpec ^~^ ValDeclaration
   lazy val varDcl = 'var -~ ids ~- `:` ~ typeSpec ^~^ VarDeclaration
@@ -547,7 +494,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
    */
   lazy val funSig = id ~ (funTypeParamClause?) ~ (paramClause*) ~ (implicitParamClause?)
 
-  lazy val implicitParamClause = (nl?) -~ round('implicit -~ params)
+  lazy val implicitParamClause = (nl?) -~ round('implicit -~ (param+/comma))
   
   /** Def ::= val PatDef
    *     | var VarDef
