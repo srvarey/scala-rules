@@ -216,12 +216,10 @@ case class ObjectDefinition(caseObject : Boolean,
     
 case class TraitDefinition(id : String,
     typeParameters : Option[List[VariantTypeParameter]], 
-    traitTemplate : TraitTemplate) extends Definition
-    
-case class TraitTemplate(
     earlyDefs : Option[List[AnnotatedDefinition]], 
     parents : List[Type], 
-    templateBody : Option[TemplateBody])
+    templateBody : Option[TemplateBody]) extends Definition
+    
     
 case class TemplateBody(alias : Option[String], selfType : Option[Type], statements : List[Statement]) extends Expression
 

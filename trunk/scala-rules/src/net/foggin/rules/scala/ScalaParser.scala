@@ -318,7 +318,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
 
   lazy val prefixExpr = (plus | minus | bang | tilde) ~ simpleExpr ^~^ PrefixExpression | simpleExpr
 
-  lazy val simpleExpr = ('new -~ (classTemplate | templateBody) ^^ InstanceCreation
+  lazy val simpleExpr = ('new -~ classTemplate ^^ InstanceCreation
       | blockExpr
       | simpleExpr1 ~- `_` ^^ Unapplied
       | simpleExpr1)
@@ -420,13 +420,6 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val param = (annotation*) ~ id ~ (paramType?) ^~~^ Parameter
   lazy val paramType = `:` -~ (`=>`-?) ~ typeSpec ~ (`*`-?) ^~~^ ParameterType
 
-  lazy val classParamClauses = (classParamClause*) ~ ((nl?) -~ round('implicit -~ (classParam+/comma)) ?) ^~^ ClassParamClauses
-  lazy val classParamClause = (nl?) -~ round(classParam*/comma)
-  lazy val classParam = (annotation*) ~ (classParamModifiers?) ~ id ~ (paramType ?) ^~~~^ ClassParameter
-
-  lazy val classParamModifiers = ((modifier*) ~- 'val ^^ ValParameterModifiers 
-      | (modifier*) ~- 'var ^^ VarParameterModifiers)
-
   lazy val modifier : Rule[Modifier] = localModifier | accessModifier | 'override -^ Override
   lazy val localModifier : Rule[Modifier]  = ('abstract -^ Abstract
       | 'final -^ Final
@@ -483,9 +476,8 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val funSig = id ~ (funTypeParamClause?) ~ (paramClause*) ~ (implicitParamClause?)
   lazy val implicitParamClause = (nl?) -~ round('implicit -~ (param+/comma))
   
-  lazy val definition : Rule[Definition] = (
-      'val -~ patDef ^~~^ ValPatternDefinition
-      | 'var -~ patDef ^~~^ VarPatternDefinition
+  lazy val definition : Rule[Definition] = (valPatDef
+      | varPatDef
       | 'var -~ ids ~ (`:` -~ typeSpec ~- `=` ~- `_`) ^~^ VarDefaultDefinition
       | 'def -~ funSig ~ (`:` -~ typeSpec ?) ~ (`=` -~ expr) ^~~~~~^ FunctionDefinition
       | 'def -~ funSig ~ ((nl?) -~ curly(block)) ^~~~~^ ProcedureDefinition
@@ -497,65 +489,69 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val constrBlock = curly(selfInvocation ~ (semi -~ blockStat *)) ^~^ ConstructorExpression
   lazy val selfInvocation = 'this -~ (argumentExprs+)
 
+  lazy val valPatDef = 'val -~ patDef ^~~^ ValPatternDefinition
+  lazy val varPatDef = 'var -~ patDef ^~~^ VarPatternDefinition
   lazy val patDef = (pattern2+/comma) ~ (`:` -~ typeSpec ?) ~ (`=` -~ expr)
+  
   lazy val typeDef = 'type -~ (nl*) -~ id ~ (typeParamClause?) ~ (`=` -~ typeSpec) ^~~^ TypeDefinition
   lazy val tmplDef = classDef | objectDef | traitDef
 
-  lazy val classDef = (('case-?) ~- 'class ~ id 
-      ~ (typeParamClause?) 
-      ~ (annotation*) 
-      ~ (accessModifier?)
-      ~ classParamClauses
-      ~ classTemplateOpt) ^~~~~~~^ ClassDefinition
+  lazy val classDef = for {
+    isCase <- ('case-?)
+    name <- 'class -~ id
+    typeParams <- (typeParamClause?)
+    annotations <- (annotation*)
+    modifier <- (accessModifier?)
+    params <- classParamClauses
+    template <- classTemplateOpt
+  } yield ClassDefinition(isCase, name, typeParams, annotations, modifier, params, template)
 
   lazy val objectDef = ('case-?) ~- 'object ~ id ~ classTemplateOpt ^~~^ ObjectDefinition
 
-  lazy val traitDef = ('trait -~ id 
-      ~ (typeParamClause?) 
-      ~ traitTemplateOpt) ^~~^ TraitDefinition
+  lazy val traitDef = for {
+    name <- 'trait -~ id
+    typeParams <- (typeParamClause?)
+    ext <- ('extends-?)
+    early <- (earlyDefs?)
+    parents <- annotType */ 'with
+    body <- (templateBody?)
+    if ext && !parents.isEmpty || early.isEmpty && parents.isEmpty && body.isDefined
+  } yield TraitDefinition(name, typeParams, early, parents, body)
 
-  /** ClassTemplateOpt ::= extends ClassTemplate | [[extends] TemplateBody] */
-  lazy val classTemplateOpt = ('extends -~ classTemplate 
-      | (('extends ?) -~ templateBody ?) ^^ (ClassTemplate(None, None, Nil, Nil, _)))
+  lazy val classParamClauses = (classParamClause*) ~ ((nl?) -~ round('implicit -~ (classParam+/comma)) ?) ^~^ ClassParamClauses
+  lazy val classParamClause = (nl?) -~ round(classParam*/comma)
+  lazy val classParam = (annotation*) ~ (classParamModifiers?) ~ id ~ (paramType ?) ^~~~^ ClassParameter
 
-  lazy val traitTemplateOpt = ('extends -~ traitTemplate
-      | (('extends?) -~ templateBody ?) ^^ (TraitTemplate(None, Nil, _)))
-  lazy val traitTemplate = (earlyDefs?) ~ traitParents ~ (templateBody?)  ^~~^ TraitTemplate
-  lazy val traitParents = annotType ~++ ('with -~ annotType *)
+  lazy val classParamModifiers = ((modifier*) ~- 'val ^^ ValParameterModifiers 
+      | (modifier*) ~- 'var ^^ VarParameterModifiers)
 
-
-  /** ClassTemplate ::= [EarlyDefs] ClassParents [TemplateBody] */
-  lazy val classTemplate = ((earlyDefs?) 
-      ~ (annotType ^^ Some[Type]) 
-      ~ (argumentExprs*) 
-      ~ ('with -~ annotType *) 
-      ~ (templateBody?)) ^~~~~^ ClassTemplate
+  lazy val classTemplateOpt = for {
+    ext <- 'extends-?; 
+    template <- classTemplate
+    if ext || template.parent.isEmpty
+  } yield template
+      
+  lazy val classTemplate = for {
+    early <- earlyDefs?;
+    parent <- annotType?;
+    args <- argumentExprs*;
+    otherParents <- 'with -~ annotType *;
+    body <- templateBody?;
+    if parent.isDefined || early.isEmpty && args.isEmpty && otherParents.isEmpty && body.isDefined
+  } yield ClassTemplate(early, parent, args, otherParents, body)
 
   /** Constr ::= AnnotType {ArgumentExprs} */
   lazy val constr = annotType ~ (argumentExprs*)
 
-  /** EarlyDefs ::= ‘{’ [EarlyDef {semi EarlyDef}] ‘}’ with */
-  lazy val earlyDefs = curly(earlyDef */semi) ~- 'with
+  lazy val earlyDefs = curly(earlyDef+/semi) ~- 'with
+  lazy val earlyDef = (annotation*) ~ (modifier*) ~ (valPatDef | varPatDef) ^~~^ AnnotatedDefinition
 
-  /** EarlyDef ::= Annotations Modifiers PatDef */
-  lazy val earlyDef = (annotation*) ~ (modifier*) ~ ('val -~ patDef ^~~^ ValPatternDefinition) ^~~^ AnnotatedDefinition
+  lazy val topStatSeq = topStat*/semi
+  lazy val topStat : Rule[Statement] = (importStat
+      | packaging
+      | (annotation*) ~ (modifier*) ~ tmplDef ^~~^ AnnotatedDefinition)
 
-  /** TopStatSeq ::= TopStat {semi TopStat} */
-  lazy val topStatSeq = topStat */semi
-
-  /** TopStat ::= {Annotation} {Modifier} TmplDef
-| Import
-| Packaging
-| */
-  lazy val topStat : Rule[Statement] = (
-      (annotation*) ~ (modifier*) ~ tmplDef ^~~^ AnnotatedDefinition
-      | importStat
-      | packaging)
-
-  /** Packaging ::= package QualId [nl] ‘{’ TopStatSeq ‘}’ */
   lazy val packaging = ('package -~ qualId) ~ ((nl?) -~ curly(topStatSeq)) ^~^ Packaging
-
-  /** CompilationUnit ::= [package QualId semi] TopStatSeq */
   lazy val compilationUnit = ('package -~ qualId ~- semi ?) ~ topStatSeq ^~^ CompilationUnit
   
 }
