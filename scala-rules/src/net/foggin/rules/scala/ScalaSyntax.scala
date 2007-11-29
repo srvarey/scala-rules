@@ -190,9 +190,8 @@ case class TypeDefinition(id : String,
     typeParameters : Option[List[VariantTypeParameter]], 
     typeSpec : Type) extends Definition
     
-case class CaseClassDefinition(classDef : ClassDefinition) extends Definition
-    
-case class ClassDefinition(id : String,
+case class ClassDefinition(caseClass : Boolean,
+    id : String,
     typeParameters : Option[List[VariantTypeParameter]], 
     annotations : List[Annotation],
     accessModifier : Option[Modifier],
@@ -211,9 +210,8 @@ case class ClassTemplate(
     otherParents : List[Type], 
     templateBody : Option[TemplateBody]) extends Expression
     
-case class CaseObjectDefinition(objectDef : ObjectDefinition) extends Definition
-
-case class ObjectDefinition(id : String,
+case class ObjectDefinition(caseObject : Boolean,
+    id : String,
     classTemplate : ClassTemplate) extends Definition
     
 case class TraitDefinition(id : String,

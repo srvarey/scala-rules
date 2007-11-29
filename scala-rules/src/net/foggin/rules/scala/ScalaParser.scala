@@ -381,8 +381,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val pattern1 = (varId ~- `:` ~ typeSpec ^~^ TypedVariablePattern
       | `_` -~ `:` -~ typeSpec ^^ TypePattern
       | pattern2)
-  lazy val pattern2 = ((varId ~- `@` ~ pattern3) ^~^ AtPattern
-      | pattern3)
+  lazy val pattern2 = (varId ~- `@` ~ pattern3) ^~^ AtPattern | pattern3
 
   lazy val pattern3 : Rule[Expression] = infixPattern(operators)
       
@@ -423,8 +422,6 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
 
   lazy val classParamClauses = (classParamClause*) ~ ((nl?) -~ round('implicit -~ (classParam+/comma)) ?) ^~^ ClassParamClauses
   lazy val classParamClause = (nl?) -~ round(classParam*/comma)
-
-  /** ClassParam ::= {Annotation} [{Modifier} (‘val’ | ‘var’)] id [‘:’ ParamType] */
   lazy val classParam = (annotation*) ~ (classParamModifiers?) ~ id ~ (paramType ?) ^~~~^ ClassParameter
 
   lazy val classParamModifiers = ((modifier*) ~- 'val ^^ ValParameterModifiers 
@@ -451,11 +448,6 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | ('this -^ None) ~ (`:` -~ typeSpec ^^ Some[Type]) ~- `=>` 
       | success(None) ~ success(None))
   
-  /** TemplateStat ::= Import
-   *     | {Annotation} {Modifier} Def
-   *     | {Annotation} {Modifier} Dcl
-   *     | Expr
-   */
   lazy val templateStat = (importStat
       | (annotation*) ~ (modifier*) ~ definition ^~~^ AnnotatedDefinition
       | (annotation*) ~ (modifier*) ~ dcl ^~~^ AnnotatedDeclaration
@@ -488,28 +480,9 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val funDcl = 'def -~ funSig ~ (`:` -~ typeSpec ?)  ^~~~~^ FunctionDeclaration
   lazy val typeDcl = 'type -~ (nl*) -~ id ~ (typeParamClause?) ~ (`>:` -~ typeSpec ?) ~ (`<:` -~ typeSpec ?) ^~~~^ TypeDeclaration
 
-  /** FunSig ::= id [FunTypeParamClause] ParamClauses 
-   *
-   *  ParamClauses ::= {ParamClause} [[nl] ‘(’ implicit Params ‘)’] 
-   */
   lazy val funSig = id ~ (funTypeParamClause?) ~ (paramClause*) ~ (implicitParamClause?)
-
   lazy val implicitParamClause = (nl?) -~ round('implicit -~ (param+/comma))
   
-  /** Def ::= val PatDef
-   *     | var VarDef
-   *     | def FunDef
-   *     | type {nl} TypeDef
-   *     | TmplDef 
-   *
-   *  VarDef ::= PatDef | ids ‘:’ Type ‘=’ ‘_’ 
-   *
-   *   FunDef ::= FunSig [‘:’ Type] ‘=’ Expr 
-   *     | FunSig [nl] ‘{’ Block ‘}’
-   *     | this ParamClause ParamClauses (‘=’ ConstrExpr | [nl] ConstrBlock) 
-   *
-   *  ParamClauses ::= {ParamClause} [[nl] ‘(’ implicit Params ‘)’] 
-   */
   lazy val definition : Rule[Definition] = (
       'val -~ patDef ^~~^ ValPatternDefinition
       | 'var -~ patDef ^~~^ VarPatternDefinition
@@ -520,56 +493,36 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | typeDef
       | tmplDef)
 
-  /** ConstrExpr ::= SelfInvocation | ConstrBlock */
-  lazy val constrExpr : Rule[ConstructorExpression] = (selfInvocation ^^ (ConstructorExpression(_, Nil)) 
-      | constrBlock)
-
-  /** ConstrBlock ::= ‘{’ SelfInvocation {semi BlockStat} ‘}’ */
+  lazy val constrExpr = selfInvocation ^^ (ConstructorExpression(_, Nil)) | constrBlock
   lazy val constrBlock = curly(selfInvocation ~ (semi -~ blockStat *)) ^~^ ConstructorExpression
-
-  /** SelfInvocation ::= this ArgumentExprs {ArgumentExprs} */
   lazy val selfInvocation = 'this -~ (argumentExprs+)
 
-
-  /** PatDef ::= Pattern2 {‘,’ Pattern2} [‘:’ Type] ‘=’ Expr */
-  lazy val patDef = (pattern2 +/comma) ~ (`:` -~ typeSpec ?) ~ (`=` -~ expr)
-
-  /** TypeDef ::= id [TypeParamClause] ‘=’ Type */
+  lazy val patDef = (pattern2+/comma) ~ (`:` -~ typeSpec ?) ~ (`=` -~ expr)
   lazy val typeDef = 'type -~ (nl*) -~ id ~ (typeParamClause?) ~ (`=` -~ typeSpec) ^~~^ TypeDefinition
+  lazy val tmplDef = classDef | objectDef | traitDef
 
-  /** TmplDef ::= [case] class ClassDef
-   *     | [case] object ObjectDef
-   *     | trait TraitDef 
-   */
-  lazy val tmplDef = ('class -~ classDef
-      | 'case -~ 'class -~ classDef ^^ CaseClassDefinition
-      | 'object -~ objectDef
-      | 'case-~ 'object -~ objectDef ^^ CaseObjectDefinition
-      | 'trait -~ traitDef)
-
-  /** ClassDef ::= id [TypeParamClause] {Annotation} [AccessModifier] ClassParamClauses ClassTemplateOpt */
-  lazy val classDef = (id 
+  lazy val classDef = (('case-?) ~- 'class ~ id 
       ~ (typeParamClause?) 
       ~ (annotation*) 
       ~ (accessModifier?)
       ~ classParamClauses
-      ~ classTemplateOpt) ^~~~~~^ ClassDefinition
+      ~ classTemplateOpt) ^~~~~~~^ ClassDefinition
 
-  /** TraitDef ::= id [TypeParamClause] TraitTemplateOpt */
-  lazy val traitDef = (id 
+  lazy val objectDef = ('case-?) ~- 'object ~ id ~ classTemplateOpt ^~~^ ObjectDefinition
+
+  lazy val traitDef = ('trait -~ id 
       ~ (typeParamClause?) 
       ~ traitTemplateOpt) ^~~^ TraitDefinition
-
-  /** ObjectDef ::= id ClassTemplateOpt */
-  lazy val objectDef = id ~ classTemplateOpt ^~^ ObjectDefinition
 
   /** ClassTemplateOpt ::= extends ClassTemplate | [[extends] TemplateBody] */
   lazy val classTemplateOpt = ('extends -~ classTemplate 
       | (('extends ?) -~ templateBody ?) ^^ (ClassTemplate(None, None, Nil, Nil, _)))
 
-  /** TraitTemplateOpt ::= extends TraitTemplate | [[extends] TemplateBody] */
   lazy val traitTemplateOpt = ('extends -~ traitTemplate
       | (('extends?) -~ templateBody ?) ^^ (TraitTemplate(None, Nil, _)))
+  lazy val traitTemplate = (earlyDefs?) ~ traitParents ~ (templateBody?)  ^~~^ TraitTemplate
+  lazy val traitParents = annotType ~++ ('with -~ annotType *)
+
 
   /** ClassTemplate ::= [EarlyDefs] ClassParents [TemplateBody] */
   lazy val classTemplate = ((earlyDefs?) 
@@ -577,15 +530,6 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       ~ (argumentExprs*) 
       ~ ('with -~ annotType *) 
       ~ (templateBody?)) ^~~~~^ ClassTemplate
-
-  /** TraitTemplate ::= [EarlyDefs] TraitParents [TemplateBody] */
-  lazy val traitTemplate = (earlyDefs?) ~ traitParents ~ (templateBody?)  ^~~^ TraitTemplate
-
-  /** ClassParents ::= Constr {with AnnotType} */
-  //def classParents = constr ~ ("with" -~ annotType *)
-
-  /** TraitParents ::= AnnotType {with AnnotType} */
-  lazy val traitParents = annotType ~++ ('with -~ annotType *)
 
   /** Constr ::= AnnotType {ArgumentExprs} */
   lazy val constr = annotType ~ (argumentExprs*)
