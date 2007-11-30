@@ -195,13 +195,9 @@ case class ClassDefinition(caseClass : Boolean,
     typeParameters : Option[List[VariantTypeParameter]], 
     annotations : List[Annotation],
     accessModifier : Option[Modifier],
-    classParamClauses : ClassParamClauses,
-    classTemplate : ClassTemplate) extends Definition
-    
-case class ClassParamClauses(
     paramClauses : List[List[ClassParameter]], 
-    implicitParamClause : Option[List[ClassParameter]])
-
+    implicitParamClause : Option[List[ClassParameter]], 
+    classTemplate : ClassTemplate) extends Definition
     
 case class ClassTemplate(
     earlyDefs : Option[List[AnnotatedDefinition]], 

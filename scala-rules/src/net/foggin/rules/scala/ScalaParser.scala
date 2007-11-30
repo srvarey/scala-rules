@@ -431,7 +431,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val accessQualifier = square(id ^^ Name | 'this -^ This)
 
   lazy val annotation : Rule[Annotation] = `@` -~ annotationExpr ~- (nl?)
-  lazy val annotationExpr = constr ~ ((nl?) -~ curly(nameValuePair*/semi) | nil) ^~~^ Annotation
+  lazy val annotationExpr = annotType ~ (argumentExprs*) ~ ((nl?) -~ curly(nameValuePair*/semi) | nil) ^~~^ Annotation
   lazy val nameValuePair = 'val -~ id ~- `=` ~ prefixExpr ^~^ Pair[String, Expression]
 
   /** TemplateBody ::= [nl] ‘{’ [id [‘:’ Type] ‘=>’] TemplateStat {semi TemplateStat} ‘}’ */
@@ -446,23 +446,15 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | (annotation*) ~ (modifier*) ~ dcl ^~~^ AnnotatedDeclaration
       | expr)
 
-  /** Import ::= import ImportExpr {‘,’ ImportExpr} */
-  lazy val importStat : Rule[Statement] = 'import -~ (importExpr +/comma) ^^ ImportStatement
-
-  /** ImportExpr ::= StableId ‘.’ (id | ‘_’ | ImportSelectors) */
+  lazy val importStat : Rule[Statement] = 'import -~ (importExpr+/comma) ^^ ImportStatement
   lazy val importExpr : Rule[Import] = (
       stableId ~- dot ~ importSelectors
       | stableId ~- dot ~ (wildcardImportSelector ^^ (List(_))) 
       | simpleImport) ^~^ Import
-
   lazy val simpleImport = path ^^ (_ reverse) ^^? {
     case Name(id) :: (rest @ Name(_) :: _) => rules.~(rest.reverse, List(ImportSelector(id, None)))
   }
-         
-  /** ImportSelectors ::= ‘{’ {ImportSelector ‘,’} (ImportSelector | ‘_’) ‘}’ */
-  lazy val importSelectors : Rule[List[ImportSelector]] = curly((importSelector ~- comma *) ~ (importSelector | wildcardImportSelector)) ^^ { case ss ~ s => (s :: ss.reverse).reverse }
-
-  /** ImportSelector ::= id [‘=>’ id | ‘=>’ ‘_’] */
+  lazy val importSelectors = curly((importSelector ~- comma *) ~ (importSelector | wildcardImportSelector)) ^^ { case ss ~ s => ss ::: s :: Nil }
   lazy val importSelector = id ~ (`=>` -~ (id | `_`) ?) ^~^ ImportSelector
   lazy val wildcardImportSelector = `_` -^ ImportSelector("_", None)
 
@@ -501,9 +493,10 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
     typeParams <- (typeParamClause?)
     annotations <- (annotation*)
     modifier <- (accessModifier?)
-    params <- classParamClauses
+    params <- (classParamClause*)
+    implicitParams <- (implicitClassParamClause?)
     template <- classTemplateOpt
-  } yield ClassDefinition(isCase, name, typeParams, annotations, modifier, params, template)
+  } yield ClassDefinition(isCase, name, typeParams, annotations, modifier, params, implicitParams, template)
 
   lazy val objectDef = ('case-?) ~- 'object ~ id ~ classTemplateOpt ^~~^ ObjectDefinition
 
@@ -517,8 +510,8 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
     if ext && !parents.isEmpty || early.isEmpty && parents.isEmpty && (body.isDefined || !ext)
   } yield TraitDefinition(name, typeParams, early, parents, body)
 
-  lazy val classParamClauses = (classParamClause*) ~ ((nl?) -~ round('implicit -~ (classParam+/comma)) ?) ^~^ ClassParamClauses
   lazy val classParamClause = (nl?) -~ round(classParam*/comma)
+  lazy val implicitClassParamClause = (nl?) -~ round('implicit -~ (classParam+/comma))
   lazy val classParam = (annotation*) ~ (classParamModifiers?) ~ id ~ (paramType ?) ^~~~^ ClassParameter
 
   lazy val classParamModifiers = ((modifier*) ~- 'val ^^ ValParameterModifiers 
@@ -538,9 +531,6 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
     body <- templateBody?;
     if parent.isDefined || early.isEmpty && args.isEmpty && otherParents.isEmpty && body.isDefined
   } yield ClassTemplate(early, parent, args, otherParents, body)
-
-  /** Constr ::= AnnotType {ArgumentExprs} */
-  lazy val constr = annotType ~ (argumentExprs*)
 
   lazy val earlyDefs = curly(earlyDef+/semi) ~- 'with
   lazy val earlyDef = (annotation*) ~ (modifier*) ~ (valPatDef | varPatDef) ^~~^ AnnotatedDefinition
