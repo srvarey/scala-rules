@@ -278,10 +278,10 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | postfixExpr ~- 'match ~ curly(caseClauses) ^~^ MatchExpression
       | postfixExpr)
       
-  lazy val assignment = simpleExpr ~- `=` ~ expr >>? {
-    case Name(id) ~ value => success(SimpleAssignment(id, value))
-    case DotExpression(expr, Name(id)) ~ value => success(DotAssignment(expr, id, value))
-    case ApplyExpression(expr, args) ~ value => success(Update(expr, args, value))
+  lazy val assignment = simpleExpr ~- `=` ~ expr ^^? {
+    case Name(id) ~ value => SimpleAssignment(id, value)
+    case DotExpression(expr, Name(id)) ~ value => DotAssignment(expr, id, value)
+    case ApplyExpression(expr, args) ~ value => Update(expr, args, value)
   }
     
   lazy val postfixExpr = infixExpr ~ id ~- (nl?) ^~^ PostfixExpression | infixExpr
@@ -450,14 +450,13 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val importStat : Rule[Statement] = 'import -~ (importExpr +/comma) ^^ ImportStatement
 
   /** ImportExpr ::= StableId ‘.’ (id | ‘_’ | ImportSelectors) */
-  def importExpr : Rule[Import] = (
-      stableId ~- dot ~ importSelectors ^^ { case path ~ selectors => Import(path, selectors) }
-      | stableId ~- dot ~ wildcardImportSelector ^^ { case path ~ selector => Import(path, List(selector)) }
-      | path >> importId)
+  lazy val importExpr : Rule[Import] = (
+      stableId ~- dot ~ importSelectors
+      | stableId ~- dot ~ (wildcardImportSelector ^^ (List(_))) 
+      | simpleImport) ^~^ Import
 
-  def importId(path : List[PathElement]) = path.reverse match {
-    case Name(id) :: (rest @ Name(_) :: _) => success(Import(rest.reverse, List(ImportSelector(id, None))))
-    case _ => failure
+  lazy val simpleImport = path ^^ (_ reverse) ^^? {
+    case Name(id) :: (rest @ Name(_) :: _) => rules.~(rest.reverse, List(ImportSelector(id, None)))
   }
          
   /** ImportSelectors ::= ‘{’ {ImportSelector ‘,’} (ImportSelector | ‘_’) ‘}’ */
@@ -515,7 +514,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
     early <- (earlyDefs?)
     parents <- annotType */ 'with
     body <- (templateBody?)
-    if ext && !parents.isEmpty || early.isEmpty && parents.isEmpty && body.isDefined
+    if ext && !parents.isEmpty || early.isEmpty && parents.isEmpty && (body.isDefined || !ext)
   } yield TraitDefinition(name, typeParams, early, parents, body)
 
   lazy val classParamClauses = (classParamClause*) ~ ((nl?) -~ round('implicit -~ (classParam+/comma)) ?) ^~^ ClassParamClauses
