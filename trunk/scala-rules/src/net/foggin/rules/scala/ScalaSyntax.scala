@@ -51,7 +51,7 @@ case class PostfixExpression(expr : Expression, id : String) extends Expression
 case class InfixExpression(id : String, left : Expression, right : Expression) extends Expression
 case class PrefixExpression(id : String, expr : Expression) extends Expression
 
-case class Block(statements : List[Statement]) extends Expression
+case class Block(statements : List[Statement], result : Option[Expression]) extends Expression
 
 case class CaseClause(pattern : Expression, guard : Option[Expression], block : Block)
 case class CaseClauses(clauses : List[CaseClause]) extends Expression
