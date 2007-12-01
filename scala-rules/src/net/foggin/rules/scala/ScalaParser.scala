@@ -13,8 +13,7 @@ object ScalaParser {
       "_", ":", "=", "=>", "<-", "<:", "<%", ">:", "#", "@", "\u21D2")
 
   /** Reserved ids that can terminate a statement */
-  val endStatements = Set(
-      "this", "null", "true", "false", "return", "type", "_")
+  val endStatements = Set("this", "null", "true", "false", "return", "type", "_")
     
   /** Reserved ids that cannot start a statement 
    *
@@ -52,13 +51,13 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   val multipleStatementsAllowed = predicate(_.multipleStatementsAllowed)
   val lastTokenCanEndStatement = predicate(_.lastTokenCanEndStatement)
   
-  def token[T](key : String, rule : Rule[T], f : T => Boolean) : Rule[T] = memo(key, !nl -~ (newline | space | comment *) -~ rule >> tokenCanEndStatement(f))
+  def token[T](key : String, rule : Rule[T], f : T => Boolean) : Rule[T] = memo(key, !nl -~ skip -~ rule >> tokenCanEndStatement(f))
   def tokenCanEndStatement[T](f : T => Boolean)(t : T) = update(_.lastTokenCanEndStatement = f(t)) -~ success(t)
   def endToken[T](key : String, rule : Rule[T]) : Rule[T] = token(key, rule, { t : T => true })
   
   val space = choice(" \t")
-  
-  lazy val startStatement = (space | comment | newline *) ~- (
+  lazy val skip = space | comment | newline *
+  lazy val startStatement = skip ~- (
       choice("({") 
       | literal 
       | id 
@@ -354,7 +353,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val argumentExprs = round(exprs ~- (comma?) | nil) | (nl?) -~ blockExpr ^^ (List(_))
 
   lazy val blockExpr : Rule[Expression] = curly(caseClauses | block)
-  lazy val block : Rule[Block] = ((blockStat ~- semi *) ~ resultExpr ^^ { case s ~ r => s ::: r :: Nil } | nil) ^^ Block
+  lazy val block : Rule[Block] = (blockStat ~- semi *) ~ (resultExpr?) ^~^ Block
   lazy val blockStat  : Rule[Statement] = (importStat
       | 'implicit -~ definition ^^ ImplicitDefinition
       | definition
