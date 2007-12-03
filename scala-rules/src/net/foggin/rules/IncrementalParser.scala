@@ -50,7 +50,7 @@ trait IncrementalInput[A, Context <: IncrementalInput[A, Context]]
   }
 
   /** Tail-recursive function.  Will only work from Scala 2.6.1. */
-  private def edit(index: Int, pos : Int, deleted: Int, values : Iterator[A]) {
+  final def edit(index: Int, pos : Int, deleted: Int, values : Iterator[A]) {
     this.index = index
     if (index <= pos) cleanResults(pos)
     if (index == pos) delete(deleted)
@@ -100,7 +100,7 @@ abstract class EditableDocument[A, Context <: IncrementalInput[A, Context]] {
    */
   def edit(pos : Int, deleted: Int, inserted : Seq[A]) {
     // can do this instead from Scala 2.6.1. on
-    //first.edit(0, pos, delete, insert.elements)
+    //first.edit(0, pos, deleted, inserted.elements)
 
     var values = inserted.elements
     var current = first

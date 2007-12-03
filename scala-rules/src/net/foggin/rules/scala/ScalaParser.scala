@@ -161,12 +161,9 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   val floatPart = ('.' ~++ (('0' to '9')*) ^^ toString) | ""
   val exponentPart = choice("Ee") ~ ("+" | "-" | "") ~ intPart ^^ { case e ~ s ~ n => e + s + n } | ""
 
-  // Note: Changed this to match scalac behaviour - even though I think it's wrong - see ticket #265
-  // TODO - resolve
   val floatLiteral = intPart ~ floatPart ~ exponentPart ~ (letter ~++ idRest ^^ toString ?) >>? {
-    case "" ~ "" ~ _ ~ _ => failure
-    case "" ~ "." ~ _ ~ _ => failure
-    case _ ~ "" ~ "" ~ None => failure
+    case "" ~ ("" | ".") ~ _ ~ _ => failure // have to have at least one digit
+    case _ ~ "" ~ "" ~ None => failure // it's an integer
     case i ~ f ~ e ~ Some("F" | "f") => success(FloatLiteral((i + f + e).toFloat))
     case i ~ f ~ e ~ (Some("D" | "d") | None)  => success(DoubleLiteral((i + f + e).toDouble))
   }
@@ -208,7 +205,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   val xmlName = xmlNameStart ~++ (xmlNameChar*) ^^ toString
   val xmlS = choice(" \t\r\n")+
   val xmlComment = "<!--" -~ anyChar *~- "-->" ^^ toString ^^ XMLComment
-  val reference = "&amp;" -^ '&' | "&lt;" -^ '<' | "&gt;" -^ '>' | "&apos;" -^ '\'' | "&quot;" -^ '"'
+  val resolvedReference = "&amp;" -^ '&' | "&lt;" -^ '<' | "&gt;" -^ '>' | "&apos;" -^ '\'' | "&quot;" -^ '"'
     
   val qualId = id+/dot
   val ids = id+/comma
@@ -266,7 +263,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
 
   lazy val expr : Rule[Expression] = (bindings | untypedIdBinding) ~- `=>` ~ expr ^~^ FunctionExpression | expr1
 
-  // TODO : SLS definition for Typed Expression is wrong.  Have raised ticket - update when outcome known.
+  // TODO : SLS definition for Typed Expression appears wrong.  Have raised ticket #263 - update when outcome known.
   lazy val expr1 : Rule[Expression] = memo("expr1",
       'if -~ round(expr) ~- (nl*) ~ expr ~ ((semi?) -~ 'else -~ expr ?) ^~~^ IfExpression
       | 'while -~ round(expr)  ~- (nl*) ~ expr ^~^ WhileExpression
@@ -288,7 +285,6 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
     case ApplyExpression(expr, args) ~ value => Update(expr, args, value)
   }
     
-//  lazy val postfixExpr = memo("postfixExpr", infixExpr ~ id ~- (nl?) ^~^ PostfixExpression | infixExpr)
   lazy val postfixExpr = memo("postfixExpr", infixExpr ~ id ^~^ PostfixExpression | infixExpr)
       
   /** InfixExpr ::= PrefixExpr | InfixExpr id [nl] InfixExpr */
@@ -357,24 +353,27 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | (argumentExprs ^^ (ApplyExpression(expr, _))) >> simpleExprRest
       | success(expr))
       
-  lazy val xmlExpr = token("xmlExpr", (xmlElement+) ^^ NodeList, { t : Any => true })
+  lazy val xmlExpr = token("xmlExpr", (xmlElement  | cDataSect | pi +) ^^ NodeList, { t : Any => true })
   lazy val xmlElement = '<' -~ xmlName ~ (attribute*) ~- (xmlS?) >~> xmlElementRest
   def xmlElementRest(name : String, attributes : List[Attribute]) : Rule[XMLElement] = ("/>" -^ None
       | '>' -~ (xmlContent  ^^ Some[Expression]) ~- endElement(name)) ^^ XMLElement(name, attributes)
   def endElement(name : String) = ("</" -~ xmlName ~- (xmlS?) ~- '>') filter (_ == name)
-  lazy val xmlContent : Rule[Expression] = (xmlElement | xmlComment | charData | scalaExpr *) ^^ NodeList // | cdataSect | pi 
+  lazy val xmlContent : Rule[Expression] = (xmlElement | xmlComment | charData | scalaExpr  | cDataSect | pi | entityRef *) ^^ NodeList
+
+  lazy val cDataSect = "<![CDATA[" -~ anyChar *~- "]]>" ^^ toString ^^ CData
+  lazy val pi = "<?" -~ xmlName ~ (xmlS -~ anyChar *~- "?>" ^^ toString | "?>" -^ "") ^~^ ProcessingInstruction
+  lazy val entityRef = '&' -~ xmlName ~- ';' ^^ EntityRef
 
   val attributeName = xmlS -~ xmlName ~- '='
   val attributeValue : Rule[Expression] = quoted('"') | quoted('\'') | scalaExpr
-  def quoted(ch : Char) = ch -~ (reference | anyChar - choice("<&")) *~- ch ^^ toString ^^ StringLiteral
+  def quoted(ch : Char) = ch -~ (resolvedReference | anyChar - choice("<&")) *~- ch ^^ toString ^^ StringLiteral
   
   // Note: changed by me to permit what scalac seems to permit
   // TODO - raise issue and resolve
-  //val scalaExpr = '{' -~ singleStatement(expr) ~- delim('}')
-  val scalaExpr = '{' -~ block ~- delim('}')
+  val scalaExpr = '{' -~ (singleStatement(expr) ~- delim('}') | block ~- delim('}'))
   
   val attribute = attributeName ~ attributeValue ^~^ Attribute
-  val charData = ("{{" -^ '{' | reference | anyChar - ("]]>" | '{' | '<' | '&') +) ^^ toString ^^ TextNode
+  val charData = ("{{" -^ '{' | resolvedReference | anyChar - ("]]>" | '{' | '<' | '&') +) ^^ toString ^^ TextNode
   
   lazy val tupleExpr = round(exprs ~- (comma?) | nil) ^^ TupleExpression
   lazy val exprs = expr +/comma
@@ -430,10 +429,11 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   }
  
   // Changed to allow constant expressions like "-1" - note prefixExpr must be a constant expression
+  // See ticket #264
   lazy val simplePattern : Rule[Expression] = memo("simplePattern", `_` -^ Underscore
       | literal
       | xmlPattern
-      | stableId ~ round(patterns ~- (comma?)) ^^ { case a ~ b => StableIdPattern(a, Some(b), false) }
+      | stableId ~ round(pattern*/comma ~- (comma?)) ^^ { case a ~ b => StableIdPattern(a, Some(b), false) }
       | stableId ~ round((pattern ~- comma *) ~- `_` ~- `*`) ^^ { case a ~ b => StableIdPattern(a, Some(b), true) }
       | round(patterns ~- (comma?)) ^^ TupleExpression
       | varId ~- !dot ^^ VariablePattern
@@ -443,11 +443,10 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val xmlPattern = token("xmlPattern", '<' -~ xmlName ~- (xmlS?) >> xmlPatternRest, { t : Any => true })
   def xmlPatternRest(name : String) : Rule[XMLPattern] = ("/>" -^ None
       | '>' -~ xmlPatternContent ~- endElement(name)) ^^ XMLPattern(name)
-  lazy val xmlPatternContent = (xmlPattern | xmlComment | charData | scalaPattern *) ^^ NodeList ^^ Some[Expression]  // | cdataSect | pi 
+  lazy val xmlPatternContent = (xmlPattern | xmlComment | charData | scalaPattern | cDataSect | pi | entityRef *) ^^ NodeList ^^ Some[Expression]
   lazy val scalaPattern = '{' -~ singleStatement(patterns ^^ TupleExpression) ~- delim('}')
 
-  /** Patterns ::= Pattern [‘,’ Patterns] | ‘_’ ‘*’  */
-  lazy val patterns = (pattern +/comma | success(Nil))
+  lazy val patterns = pattern+/comma
 
   lazy val typeParamClause : Rule[List[VariantTypeParameter]] = square(variantTypeParam+/comma)
   lazy val funTypeParamClause = square(typeParam+/comma)
