@@ -1,6 +1,8 @@
 package net.foggin.rules.scala;
 
 trait Statement
+case object EmptyStatement extends Statement
+
 trait Expression extends Statement
 
 sealed abstract class Literal extends Expression
@@ -115,7 +117,7 @@ case class TypeDeclaration(id : String,
     lowerBound : Option[Type], 
     upperBound : Option[Type]) extends Declaration
 
-case class TypeParameter(id : String, lowerBound : Option[Type], upperBound : Option[Type], viewBound : Option[Type])
+case class TypeParameter(id : String, typeParameters : Option[List[VariantTypeParameter]], lowerBound : Option[Type], upperBound : Option[Type], viewBound : Option[Type])
 case class VariantTypeParameter(variance : Variance, typeParam : TypeParameter)
 
 sealed abstract class Variance

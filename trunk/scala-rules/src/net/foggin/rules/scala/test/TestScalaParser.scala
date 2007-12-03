@@ -45,8 +45,8 @@ checkRule(typeSpec)(
      
      "def a[B, C](b : => B, c : C*)(implicit d : D) : A" -> FunctionDeclaration("a",
          Some(List(
-             TypeParameter("B",None,None,None), 
-             TypeParameter("C",None,None,None))),
+             TypeParameter("B",None,None,None,None), 
+             TypeParameter("C",None,None,None,None))),
          List(List(
              Parameter(List(), "b", Some(ParameterType(true, TypeDesignator(List(),"B"), false))), 
              Parameter(List(), "c", Some(ParameterType(false, TypeDesignator(List(),"C"), true))))), 
@@ -56,9 +56,9 @@ checkRule(typeSpec)(
          
      "type A[+B <: C, -D >: E, F <% G] >: H <: I" -> TypeDeclaration("A", 
          Some(List(
-             VariantTypeParameter(Covariant, TypeParameter("B", None, Some(TypeDesignator(List(), "C")), None)), 
-             VariantTypeParameter(Contravariant, TypeParameter("D", Some(TypeDesignator(List(), "E")), None, None)), 
-             VariantTypeParameter(Invariant, TypeParameter("F", None, None, Some(TypeDesignator(List(), "G")))))), 
+             VariantTypeParameter(Covariant, TypeParameter("B", None, None, Some(TypeDesignator(List(), "C")), None)), 
+             VariantTypeParameter(Contravariant, TypeParameter("D", None, Some(TypeDesignator(List(), "E")), None, None)), 
+             VariantTypeParameter(Invariant, TypeParameter("F", None, None, None, Some(TypeDesignator(List(), "G")))))), 
          Some(TypeDesignator(List(), "H")),
          Some(TypeDesignator(List(), "I")))
      )
@@ -79,7 +79,7 @@ checkRule(typeSpec)(
          "'symbol" -> SymbolLiteral('symbol),
          "_" -> Underscore,
          "(1, 2, )" -> TupleExpression(List(IntegerLiteral(1), IntegerLiteral(2))),
-         "1.toString" -> DotExpression(IntegerLiteral(1), Name("toString")),
+         "1 .toString" -> DotExpression(IntegerLiteral(1), Name("toString")),
          
          "a[B, C]" -> ExpressionTypeArgs(Name("a"),
              List(TypeDesignator(List(), "B"), TypeDesignator(List(), "C"))),
@@ -160,8 +160,8 @@ checkRule(typeSpec)(
          "_" -> Underscore,
          "1" -> IntegerLiteral(1),
          "x" -> VariablePattern("x"),
-         "X" -> StableIdPattern(List(Name("X")), None, false),
-         "x.y" -> StableIdPattern(List(Name("x"), Name("y")), None, false),
+         "X" -> Name("X"), //StableIdPattern(List(Name("X")), None, false),
+         "x.y" -> DotExpression(Name("x"),Name("y")), //StableIdPattern(List(Name("x"), Name("y")), None, false),
          "X(a, b)" -> StableIdPattern(List(Name("X")), Some(List(VariablePattern("a"), VariablePattern("b"))),false),
          "X(_*)" -> StableIdPattern(List(Name("X")), Some(List()), true),
          "(x, y)" -> TupleExpression(List(VariablePattern("x"), VariablePattern("y"))),
@@ -183,7 +183,8 @@ checkRule(typeSpec)(
         AnnotatedDefinition(List(),List(),ClassDefinition(false, "Hello",None,List(),None, List(), None,
             ClassTemplate(None,None,List(),List(),Some(TemplateBody(None,None,List(
                 AnnotatedDefinition(List(),List(),ProcedureDefinition("hello",None,List(List()),None,
-                    Block(List(), Some(ApplyExpression(Name("println"),List(StringLiteral("Hello World"))))))))))))))))
+                    Block(List(), Some(ApplyExpression(Name("println"),List(StringLiteral("Hello World")))))))))))))))
+  )
     
   
   checkRule(unicodeEscape)("\\u0030" -> '0', "\\u21D2" -> '\u21D2')
