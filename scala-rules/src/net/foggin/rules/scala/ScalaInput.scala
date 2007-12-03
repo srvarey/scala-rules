@@ -32,6 +32,5 @@ class ScalaInput[T <: Input[Char, T] with Memoisable[T]](val input : T, val stat
     }
   }
 
-  //override def toString = input.mkString("")
+  override def toString = state + input.toString
 }
-

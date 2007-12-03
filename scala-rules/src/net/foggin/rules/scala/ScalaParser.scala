@@ -74,7 +74,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   def delimCanEndStatement(ch : Char) = ")]}" contains ch
   def delim (char : Char) : Rule[Char] = delimiter.filter(_ == char)
     
-  lazy val semi = delim(';') | (nl+)
+  lazy val semi = memo("semi", delim(';') | (nl+))
   lazy val dot = delim('.')
   lazy val comma = delim(',')
   
@@ -134,7 +134,8 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val idRest : Rule[List[Char]] = ('_' ~++ (opChar+)) ~- !idChar | !idChar -^ Nil | idChar ~++ idRest
   
   val quoteId = endToken("quoteId", '`' -~ (printableChar +~- '`') ^^ toString)
-  val plainId = endToken("plainId", notReserved((letter ~++ idRest | (opChar+)) ^^ toString))
+  val unquotedId = letter ~++ idRest | (opChar+)
+  val plainId = endToken("plainId", notReserved((unquotedId) ^^ toString))
   val id = quoteId | plainId
   val varId = plainId filter { id => id.charAt(0) isLowerCase }
   val rightOp = plainId filter { id => id.endsWith(":") }
@@ -160,18 +161,20 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   val floatPart = ('.' ~++ (('0' to '9')*) ^^ toString) | ""
   val exponentPart = choice("Ee") ~ ("+" | "-" | "") ~ intPart ^^ { case e ~ s ~ n => e + s + n } | ""
 
-  val floatLiteral = intPart ~ floatPart ~ exponentPart ~ (choice("FfDd")?) >> {
+  // Note: Changed this to match scalac behaviour - even though I think it's wrong - see ticket #265
+  // TODO - resolve
+  val floatLiteral = intPart ~ floatPart ~ exponentPart ~ (letter ~++ idRest ^^ toString ?) >>? {
     case "" ~ "" ~ _ ~ _ => failure
     case "" ~ "." ~ _ ~ _ => failure
     case _ ~ "" ~ "" ~ None => failure
-    case i ~ f ~ e ~ Some('F' | 'f') => success(FloatLiteral((i + f + e).toFloat))
-    case i ~ f ~ e ~ _ => success(DoubleLiteral((i + f + e).toDouble))
+    case i ~ f ~ e ~ Some("F" | "f") => success(FloatLiteral((i + f + e).toFloat))
+    case i ~ f ~ e ~ (Some("D" | "d") | None)  => success(DoubleLiteral((i + f + e).toDouble))
   }
 
   val charElement = charEscapeSeq | printableChar
   val characterLiteral = '\'' -~ (charElement - '\'') ~- '\'' ^^ CharacterLiteral
-  val stringLiteral = ('\"' -~ charElement *~- '\"' | "\"\"\"" -~ anyChar *~- "\"\"\"") ^^ toString ^^ StringLiteral
-  val symbolLiteral = '\'' -~ plainId ^^ Symbol ^^ SymbolLiteral
+  val stringLiteral = ("\"\"\"" -~ anyChar *~- "\"\"\"" | '\"' -~ charElement *~- '\"') ^^ toString ^^ StringLiteral
+  val symbolLiteral = '\'' -~ unquotedId ^^ toString ^^ Symbol ^^ SymbolLiteral
   
   // note multi-line comments can nest
   lazy val multiLineComment : Rule[String] = ("/*" -~ (multiLineComment | anyChar) *~- "*/") ^^ toString
@@ -181,12 +184,12 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val literal : Rule[Literal] = endToken("literal", 
       'null -~ !idChar -^ Null
       | 'true -~ !idChar -^ True
-      | 'false -~ !idChar -^ False
-      | integerLiteral 
+      | 'false -~ !idChar -^ False 
       | characterLiteral 
       | stringLiteral 
       | symbolLiteral
-      | floatLiteral)
+      | floatLiteral
+      | integerLiteral)
     
   val xmlNameStart = (elem('_')
       | unicode(LOWERCASE_LETTER) // Ll
@@ -257,12 +260,14 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | `#` -~ (id ^^ TypeProjection(simpleType)) >> typeArgsOrProjection
       | success(simpleType))
       
-  lazy val typeArgs = square(types)
+  // TODO: Changed by me to allow `_` - resolve with spec
+  lazy val typeArgs = square((typeSpec | `_` -^ TypeDesignator(Nil, "_"))+/comma)
   lazy val types = typeSpec+/comma
 
   lazy val expr : Rule[Expression] = (bindings | untypedIdBinding) ~- `=>` ~ expr ^~^ FunctionExpression | expr1
 
-  lazy val expr1 : Rule[Expression] = (
+  // TODO : SLS definition for Typed Expression is wrong.  Have raised ticket - update when outcome known.
+  lazy val expr1 : Rule[Expression] = memo("expr1",
       'if -~ round(expr) ~- (nl*) ~ expr ~ ((semi?) -~ 'else -~ expr ?) ^~~^ IfExpression
       | 'while -~ round(expr)  ~- (nl*) ~ expr ^~^ WhileExpression
       | 'try -~ curly(block) ~ ('catch -~ curly(caseClauses) ?) ~ ('finally -~ expr ?) ^~~^ TryCatchFinally
@@ -271,7 +276,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | 'throw -~ expr ^^ Throw
       | 'return -~ (expr?) ^^ Return
       | assignment
-      | postfixExpr ~- `:` ~ compoundType ^~^ TypedExpression
+      | postfixExpr ~- `:` ~ typeSpec ^~^ TypedExpression
       | postfixExpr ~- `:` ~ (annotation+) ^~^ AnnotatedExpression
       | postfixExpr ~- `:` ~- `_` ~- `*` ^^ VarArgExpression
       | postfixExpr ~- 'match ~ curly(caseClauses) ^~^ MatchExpression
@@ -283,10 +288,11 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
     case ApplyExpression(expr, args) ~ value => Update(expr, args, value)
   }
     
-  lazy val postfixExpr = infixExpr ~ id ~- (nl?) ^~^ PostfixExpression | infixExpr
+//  lazy val postfixExpr = memo("postfixExpr", infixExpr ~ id ~- (nl?) ^~^ PostfixExpression | infixExpr)
+  lazy val postfixExpr = memo("postfixExpr", infixExpr ~ id ^~^ PostfixExpression | infixExpr)
       
   /** InfixExpr ::= PrefixExpr | InfixExpr id [nl] InfixExpr */
-  lazy val infixExpr = infix(operators)
+  lazy val infixExpr = memo("infixExpr", infix(operators))
   
   def infix(operators : List[Rule[(Expression, Expression) => Expression]]) : Rule[Expression] = {
     val op :: tail = operators
@@ -315,12 +321,25 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
         !first.isLetter && !"_$|^&<>=!:+-*%/".contains(first)
   }
 
-  lazy val prefixExpr = (plus | minus | bang | tilde) ~ simpleExpr ^~^ PrefixExpression | simpleExpr
+  lazy val prefixExpr = memo("prefixExpr", (plus | minus | bang | tilde) ~ simpleExpr ^~^ PrefixExpression | simpleExpr)
+
+  /**
+  SimpleExpr ::= ‘new’ (ClassTemplate | TemplateBody)
+                      | BlockExpr
+                      | SimpleExpr1 [‘_’]
+  SimpleExpr1 ::= Literal
+                      | Path
+                      | ‘_’
+                      | ‘(’ [Exprs [‘,’]] ‘)’
+                      | SimpleExpr ‘.’ id
+                      | SimpleExpr TypeArgs
+                      | SimpleExpr1 ArgumentExprs
+                      | XmlExpr
+  */
 
   lazy val simpleExpr = ('new -~ classTemplate ^^ InstanceCreation
       | blockExpr
-      | simpleExpr1 ~- `_` ^^ Unapplied
-      | simpleExpr1)
+      | simpleExpr1) >> simpleExprRest
 
   lazy val simpleExpr1 : Rule[Expression] = (`_` -^ Underscore
       | literal
@@ -328,10 +347,14 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | pathElement
       | tupleExpr) >> simpleExpr1Rest
       
+  def simpleExprRest(expr : Expression) : Rule[Expression] = (
+      dot -~ (pathElement ^^ (DotExpression(expr, _))) >> simpleExprRest
+      | (typeArgs ^^ (ExpressionTypeArgs(expr, _))) >> simpleExprRest
+      | simpleExpr1Rest(expr))
+      
   def simpleExpr1Rest(expr : Expression) : Rule[Expression] = (
-      dot -~ (pathElement ^^ (DotExpression(expr, _))) >> simpleExpr1Rest
-      | (typeArgs ^^ (ExpressionTypeArgs(expr, _))) >> simpleExpr1Rest
-      | (argumentExprs ^^ (ApplyExpression(expr, _))) >> simpleExpr1Rest
+      `_` -^ Unapplied(expr) >> simpleExprRest
+      | (argumentExprs ^^ (ApplyExpression(expr, _))) >> simpleExprRest
       | success(expr))
       
   lazy val xmlExpr = token("xmlExpr", (xmlElement+) ^^ NodeList, { t : Any => true })
@@ -344,7 +367,12 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   val attributeName = xmlS -~ xmlName ~- '='
   val attributeValue : Rule[Expression] = quoted('"') | quoted('\'') | scalaExpr
   def quoted(ch : Char) = ch -~ (reference | anyChar - choice("<&")) *~- ch ^^ toString ^^ StringLiteral
-  val scalaExpr = '{' -~ singleStatement(expr) ~- delim('}')
+  
+  // Note: changed by me to permit what scalac seems to permit
+  // TODO - raise issue and resolve
+  //val scalaExpr = '{' -~ singleStatement(expr) ~- delim('}')
+  val scalaExpr = '{' -~ block ~- delim('}')
+  
   val attribute = attributeName ~ attributeValue ^~^ Attribute
   val charData = ("{{" -^ '{' | reference | anyChar - ("]]>" | '{' | '<' | '&') +) ^^ toString ^^ TextNode
   
@@ -354,35 +382,46 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
 
   lazy val blockExpr : Rule[Expression] = curly(caseClauses | block)
   lazy val block : Rule[Block] = (blockStat ~- semi *) ~ (resultExpr?) ^~^ Block
-  lazy val blockStat  : Rule[Statement] = (importStat
-      | 'implicit -~ definition ^^ ImplicitDefinition
-      | definition
-      | nil ~ (localModifier*) ~ tmplDef ^~~^ AnnotatedDefinition // TODO: check - shouldn't annotations be allowed?
-      | expr1)
+  
+  // TODO: This is different from what's in the spec.  Resolve
+  lazy val blockStat  : Rule[Statement] = memo("blockStat", importStat
+      | (annotation*) ~ (localModifier*) ~ definition ^~~^ AnnotatedDefinition
+      | expr1
+      | success(EmptyStatement))
 
   lazy val resultExpr = (bindings | singleIdBinding ) ~- `=>` ~ block ^~^ FunctionExpression | expr1
-  lazy val bindings = round(binding +/comma)
+  lazy val bindings = round(binding*/comma)
   lazy val binding = id ~ (`:` -~ typeSpec ?) ^~^ Binding
   lazy val singleIdBinding = id ~ (`:` -~ compoundType ?) ^~^ Binding ^^ { List(_) }
   lazy val untypedIdBinding = id ~ none ^~^ Binding ^^ { List(_) }
   
-  lazy val enumerators = generator ~++ (semi -~ enumerator *)
+  // Note: added deprecated syntax
+  lazy val enumerators = (generator | deprecatedGenerator) ~++ (semi -~ enumerator *)
+  
   lazy val generator = pattern1 ~- `<-` ~ expr ~ (guard?) ^~~^ Generator
-  lazy val enumerator : Rule[Enumerator] = (generator 
-      | guard ^^ Guard 
-      | ('val -~ pattern1 ~- `=`) ~ expr ^~^ ValEnumerator)
   lazy val guard = 'if -~ postfixExpr
+  lazy val enumerator : Rule[Enumerator] = (generator 
+      | guard ^^ Guard
+      | ('val -~ pattern1 ~- `=`) ~ expr ^~^ ValEnumerator 
+      | deprecatedEnumerator)
+      
+  lazy val deprecatedGenerator = 'val -~ pattern1 ~- `<-` ~ expr ~ none ^~~^ Generator
+  lazy val deprecatedEnumerator : Rule[Enumerator] = (deprecatedGenerator 
+      | (pattern1 ~- `=`) ~ expr ^~^ ValEnumerator 
+      | postfixExpr ^^ Guard)
 
   lazy val caseClauses = (caseClause+) ^^ CaseClauses
   lazy val caseClause = 'case -~ singleStatement(pattern ~ (guard?)) ~- `=>` ~ block ^~~^ CaseClause
 
   lazy val pattern = pattern1 ~*~ (`|` -^ OrPattern _)
-  lazy val pattern1 = (varId ~- `:` ~ typeSpec ^~^ TypedVariablePattern
-      | `_` -~ `:` -~ typeSpec ^^ TypePattern
+  
+  // Note: Changed by me to infixType
+  lazy val pattern1 = (varId ~- `:` ~ infixType ^~^ TypedVariablePattern
+      | `_` -~ `:` -~ infixType ^^ TypePattern
       | pattern2)
   lazy val pattern2 = (varId ~- `@` ~ pattern3) ^~^ AtPattern | pattern3
-
-  lazy val pattern3 : Rule[Expression] = infixPattern(operators)
+  
+   lazy val pattern3 : Rule[Expression] = infixPattern(operators) | prefixExpr
       
   def infixPattern(operators : List[Rule[(Expression, Expression) => Expression]]) : Rule[Expression] = {
     val op :: tail = operators
@@ -390,14 +429,16 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
     next ~*~ (op - `|`)
   }
  
-  lazy val simplePattern : Rule[Expression] = (`_` -^ Underscore
-      | varId ~- !dot ^^ VariablePattern
+  // Changed to allow constant expressions like "-1" - note prefixExpr must be a constant expression
+  lazy val simplePattern : Rule[Expression] = memo("simplePattern", `_` -^ Underscore
       | literal
       | xmlPattern
       | stableId ~ round(patterns ~- (comma?)) ^^ { case a ~ b => StableIdPattern(a, Some(b), false) }
       | stableId ~ round((pattern ~- comma *) ~- `_` ~- `*`) ^^ { case a ~ b => StableIdPattern(a, Some(b), true) }
-      | stableId  ^^ (StableIdPattern(_, None, false))
-      | round(patterns ~- (comma?)) ^^ TupleExpression)
+      | round(patterns ~- (comma?)) ^^ TupleExpression
+      | varId ~- !dot ^^ VariablePattern
+      | prefixExpr  // added by me, but prevents next alternative from succeeding
+      | stableId  ^^ (StableIdPattern(_, None, false)))
 
   lazy val xmlPattern = token("xmlPattern", '<' -~ xmlName ~- (xmlS?) >> xmlPatternRest, { t : Any => true })
   def xmlPatternRest(name : String) : Rule[XMLPattern] = ("/>" -^ None
@@ -408,12 +449,15 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   /** Patterns ::= Pattern [‘,’ Patterns] | ‘_’ ‘*’  */
   lazy val patterns = (pattern +/comma | success(Nil))
 
-  lazy val typeParamClause = square(variantTypeParam+/comma)
+  lazy val typeParamClause : Rule[List[VariantTypeParameter]] = square(variantTypeParam+/comma)
   lazy val funTypeParamClause = square(typeParam+/comma)
 
   lazy val variance = plus -^ Covariant | minus -^ Contravariant | success(Invariant)
   lazy val variantTypeParam = variance ~ typeParam ^~^ VariantTypeParameter
-  lazy val typeParam = id ~ (`>:` -~ typeSpec ?) ~ (`<:` -~ typeSpec ?) ~ (`<%` -~ typeSpec ?) ^~~~^ TypeParameter
+  
+  /** TypeParam ::= id [‘>:’ Type] [‘<:’ Type] [‘<%’ Type] */
+  // TODO: Definition from SLS is wrong (no type parameters after id) - raise issue
+  lazy val typeParam = (id | `_`) ~ (typeParamClause?) ~ (`>:` -~ typeSpec ?) ~ (`<:` -~ typeSpec ?) ~ (`<%` -~ typeSpec ?) ^~~~~^ TypeParameter
 
   lazy val paramClause = (nl?) -~ round(param*/comma)
   lazy val param = (annotation*) ~ id ~ (paramType?) ^~~^ Parameter
@@ -434,16 +478,17 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val nameValuePair = 'val -~ id ~- `=` ~ prefixExpr ^~^ Pair[String, Expression]
 
   /** TemplateBody ::= [nl] ‘{’ [id [‘:’ Type] ‘=>’] TemplateStat {semi TemplateStat} ‘}’ */
-  lazy val templateBody = (nl?) -~ curly(selfType ~- (nl*) ~ (templateStat+/semi)) ^~~^ TemplateBody
+  lazy val templateBody = (nl?) -~ curly(selfType ~ (templateStat*/semi)) ^~~^ TemplateBody
 
   lazy val selfType = ((id ^^ Some[String]) ~ (`:` -~ typeSpec ?)  ~- `=>`
-      | ('this -^ None) ~ (`:` -~ typeSpec ^^ Some[Type]) ~- `=>` 
+      | ('this -^ None) ~ (`:` -~ infixType ^^ Some[Type]) ~- `=>` 
       | success(None) ~ success(None))
   
-  lazy val templateStat = (importStat
+  lazy val templateStat = memo("templateStat", importStat
       | (annotation*) ~ (modifier*) ~ definition ^~~^ AnnotatedDefinition
       | (annotation*) ~ (modifier*) ~ dcl ^~~^ AnnotatedDeclaration
-      | expr)
+      | expr
+      | success(EmptyStatement))
 
   lazy val importStat : Rule[Statement] = 'import -~ (importExpr+/comma) ^^ ImportStatement
   lazy val importExpr : Rule[Import] = (
@@ -457,7 +502,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val importSelector = id ~ (`=>` -~ (id | `_`) ?) ^~^ ImportSelector
   lazy val wildcardImportSelector = `_` -^ ImportSelector("_", None)
 
-  lazy val dcl = (valDcl | varDcl | funDcl | typeDcl)
+  lazy val dcl = memo("dcl", valDcl | varDcl | funDcl | typeDcl)
   lazy val valDcl = 'val -~ ids ~- `:` ~ typeSpec ^~^ ValDeclaration
   lazy val varDcl = 'var -~ ids ~- `:` ~ typeSpec ^~^ VarDeclaration
   lazy val funDcl = 'def -~ funSig ~ (`:` -~ typeSpec ?)  ^~~~~^ FunctionDeclaration
@@ -466,7 +511,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val funSig = id ~ (funTypeParamClause?) ~ (paramClause*) ~ (implicitParamClause?)
   lazy val implicitParamClause = (nl?) -~ round('implicit -~ (param+/comma))
   
-  lazy val definition : Rule[Definition] = (valPatDef
+  lazy val definition : Rule[Definition] = memo("definition", valPatDef
       | varPatDef
       | 'var -~ ids ~ (`:` -~ typeSpec ~- `=` ~- `_`) ^~^ VarDefaultDefinition
       | 'def -~ funSig ~ (`:` -~ typeSpec ?) ~ (`=` -~ expr) ^~~~~~^ FunctionDefinition
@@ -484,7 +529,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val patDef = (pattern2+/comma) ~ (`:` -~ typeSpec ?) ~ (`=` -~ expr)
   
   lazy val typeDef = 'type -~ (nl*) -~ id ~ (typeParamClause?) ~ (`=` -~ typeSpec) ^~~^ TypeDefinition
-  lazy val tmplDef = classDef | objectDef | traitDef
+  lazy val tmplDef = memo("tmplDef", classDef | objectDef | traitDef)
 
   lazy val classDef = for {
     isCase <- ('case-?)
@@ -502,11 +547,8 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val traitDef = for {
     name <- 'trait -~ id
     typeParams <- (typeParamClause?)
-    ext <- ('extends-?)
-    early <- (earlyDefs?)
-    parents <- annotType */ 'with
-    body <- (templateBody?)
-    if ext && !parents.isEmpty || early.isEmpty && parents.isEmpty && (body.isDefined || !ext)
+    template <- traitTemplate
+    val early ~ parents ~ body = template
   } yield TraitDefinition(name, typeParams, early, parents, body)
 
   lazy val classParamClause = (nl?) -~ round(classParam*/comma)
@@ -516,20 +558,15 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val classParamModifiers = ((modifier*) ~- 'val ^^ ValParameterModifiers 
       | (modifier*) ~- 'var ^^ VarParameterModifiers)
 
-  lazy val classTemplateOpt = for {
-    ext <- 'extends-?; 
-    template <- classTemplate
-    if ext || template.parent.isEmpty
-  } yield template
+  lazy val classTemplateOpt = ('extends -~ classTemplate
+      | none ~ none ~ nil ~ nil ~ ('extends -~ templateBody ^^ Some[TemplateBody]) ^~~~~^ ClassTemplate
+      | none ~ none ~ nil ~ nil ~ (templateBody?) ^~~~~^ ClassTemplate)
       
-  lazy val classTemplate = for {
-    early <- earlyDefs?;
-    parent <- annotType?;
-    args <- argumentExprs*;
-    otherParents <- 'with -~ annotType *;
-    body <- templateBody?;
-    if parent.isDefined || early.isEmpty && args.isEmpty && otherParents.isEmpty && body.isDefined
-  } yield ClassTemplate(early, parent, args, otherParents, body)
+  lazy val classTemplate = (earlyDefs?) ~ (annotType ^^ Some[Type]) ~ (argumentExprs*) ~ ('with -~ annotType *) ~ (templateBody?)  ^~~~~^ ClassTemplate
+
+  lazy val traitTemplate= ('extends -~ (earlyDefs?) ~ (annotType +/ 'with) ~ (templateBody?)
+      | none ~ nil ~ ('extends -~ templateBody ^^ (Some(_)))
+      | none ~ nil ~ (templateBody?))
 
   lazy val earlyDefs = curly(earlyDef+/semi) ~- 'with
   lazy val earlyDef = (annotation*) ~ (modifier*) ~ (valPatDef | varPatDef) ^~~^ AnnotatedDefinition
@@ -540,6 +577,6 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | (annotation*) ~ (modifier*) ~ tmplDef ^~~^ AnnotatedDefinition)
 
   lazy val packaging = ('package -~ qualId) ~ ((nl?) -~ curly(topStatSeq)) ^~^ Packaging
-  lazy val compilationUnit = ('package -~ qualId ~- semi ?) ~ topStatSeq ^~^ CompilationUnit
+  lazy val compilationUnit = ('package -~ qualId ~- semi ?) ~ topStatSeq ~- skip ^~^ CompilationUnit
   
 }
