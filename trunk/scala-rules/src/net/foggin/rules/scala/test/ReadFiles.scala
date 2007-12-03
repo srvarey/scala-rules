@@ -21,7 +21,7 @@ object ReadFiles extends ScalaParser[ReaderInput] with Application {
     result match {
       //case Success(value, rest) => println(value + "\nRemaining = \"" + rest)//.mkString("") + "\"")
       case Success(value, rest) if rest.mkString("") != "" => error(value + "\nRemaining = \"" + rest.mkString("") + "\"")
-      case Success(value, rest) => println("Success!  Remaining = \"" + rest.mkString("") + "\"")
+      case Success(value, rest) => println("Success!")
       case _ => error("Failure!")
     }
   }
