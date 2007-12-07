@@ -3,19 +3,22 @@
 = Available =
 
   * Simple incremental parser framework build on rule combinator abstraction
-  * Scala scanner
-    * no support for embedded XML yet
-  * Eclipse plugin with an editor that can highlight Scala:
+  * Full Scala parser
+    * including embedded XML
+    * successfully parses all the Scala compiler source
+  * Eclipse plug-in with a simple editor that can highlight Scala:
     * keywords
     * comments
     * literals
+    * won't work with XML yet
 
-= Under construction =
+See also the mailing-list announcement: http://www.nabble.com/-scala--Another-parser-for-Scala-tf4936491.html
 
-  * Full Scala parser
-    * Proper newline handling not done yet
-    * No XML yet
 
 = Planned =
 
+  * Integrate with refactored Scala parser combinator 
+    * planned for Scala release 2.6.2
   * AST rewriting?
+  * Suggestions welcome!
+    * JavaScript backend for Scala (suggested by Adriaan Moors)
