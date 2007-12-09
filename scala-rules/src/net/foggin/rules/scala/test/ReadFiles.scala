@@ -29,25 +29,6 @@ object ReadFiles extends ScalaParser[ReaderInput] with Application {
 
 
 
-trait DefaultMemoisable[Context <: Memoisable[Context]] extends Memoisable[Context] {
-  
-  self : Context =>
-
-  protected val map = new _root_.scala.collection.mutable.HashMap[AnyRef, Result[Any, Context]]
-
-  def memo[T](key : AnyRef, f : Context => Result[T, Context]) = {
-    map.getOrElseUpdate(key, compute(key, f)).asInstanceOf[Result[T, Context]]
-  }
-  
-  protected def compute[T](key : AnyRef, f : Context => Result[T, Context]) = {
-    val result = f(this)
-    //if (result.isSuccess) println(key + " -> " + result)
-    //println(key + " -> " + result + " at " + this)
-    result
-  }
-}
-
-
 class ReaderInput(reader : Reader, val index : Int) extends Input[Char, ReaderInput] with DefaultMemoisable[ReaderInput] {
   
   def this(reader : Reader) = this(reader, 0)

@@ -12,41 +12,22 @@ class DefaultDocument extends EditableDocument[Char, DefaultIncrementalInput] {
   val first = new DefaultIncrementalInput
 }
 
-trait MemoisableRules extends Rules {
-  type Context <: Memoisable[Context]
-  
-  def memo[A](key : AnyRef, f : Context => Result[A]) : Rule[A] = createRule[A] { ctx => ctx.memo(key, f) }
-}
-
-trait Memoisable[Context] {
-  def memo[A](key : AnyRef, f : Context => Result[A, Context]) : Result[A, Context]
-}
-
 object IncrementalInput {
   var debug = false
 }
 
 trait IncrementalInput[A, Context <: IncrementalInput[A, Context]]
     extends Input[A, Context] 
-    with Memoisable[Context] 
+    with DefaultMemoisable[Context] 
     with Ordered[Context] { self : Context =>
 
   var next : Result[A, Context] = Failure[Context]
   var index : Int = 0
 
-  val map = new _root_.scala.collection.mutable.HashMap[AnyRef, Result[Any, Context]]
-
   def compare(other : Context) = index - other.index
 
-  def memo[B](key : AnyRef, f : Context => Result[B, Context]) : Result[B, Context] = {
-    map.getOrElseUpdate(key, {
-      val result = f(this)
-      if(IncrementalInput.debug) result match {
-        case Success(value, element) => println(key + " -> " + value)
-        case _ =>
-      }
-      result
-    }).asInstanceOf[Result[B, Context]]
+  override protected def onSuccess[T](key : AnyRef,  result : Success[T, Context]) { 
+    if(IncrementalInput.debug) println(key + " -> " + result) 
   }
 
   /** Tail-recursive function.  Will only work from Scala 2.6.1. */
