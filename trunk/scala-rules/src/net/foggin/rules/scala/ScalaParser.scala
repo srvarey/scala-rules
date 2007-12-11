@@ -476,7 +476,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val annotationExpr = annotType ~ (argumentExprs*) ~ ((nl?) -~ curly(nameValuePair*/semi) | nil) ^~~^ Annotation
   lazy val nameValuePair = 'val -~ id ~- `=` ~ prefixExpr ^~^ Pair[String, Expression]
 
-  /** TemplateBody ::= [nl] ‘{’ [id [‘:’ Type] ‘=>’] TemplateStat {semi TemplateStat} ‘}’ */
+  lazy val optTemplateBody = templateBody ^^ Some[TemplateBody] | !((nl?) -~ delim('{')) -^ None
   lazy val templateBody = (nl?) -~ curly(selfType ~ (templateStat*/semi)) ^~~^ TemplateBody
 
   lazy val selfType = ((id ^^ Some[String]) ~ (`:` -~ typeSpec ?)  ~- `=>`
@@ -559,13 +559,13 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
 
   lazy val classTemplateOpt = ('extends -~ classTemplate
       | none ~ none ~ nil ~ nil ~ ('extends -~ templateBody ^^ Some[TemplateBody]) ^~~~~^ ClassTemplate
-      | none ~ none ~ nil ~ nil ~ (templateBody?) ^~~~~^ ClassTemplate)
+      | none ~ none ~ nil ~ nil ~ optTemplateBody ^~~~~^ ClassTemplate)
       
-  lazy val classTemplate = (earlyDefs?) ~ (annotType ^^ Some[Type]) ~ (argumentExprs*) ~ ('with -~ annotType *) ~ (templateBody?)  ^~~~~^ ClassTemplate
+  lazy val classTemplate = (earlyDefs?) ~ (annotType ^^ Some[Type]) ~ (argumentExprs*) ~ ('with -~ annotType *) ~ optTemplateBody  ^~~~~^ ClassTemplate
 
-  lazy val traitTemplate= ('extends -~ (earlyDefs?) ~ (annotType +/ 'with) ~ (templateBody?)
+  lazy val traitTemplate= ('extends -~ (earlyDefs?) ~ (annotType +/ 'with) ~ optTemplateBody
       | none ~ nil ~ ('extends -~ templateBody ^^ (Some(_)))
-      | none ~ nil ~ (templateBody?))
+      | none ~ nil ~ optTemplateBody)
 
   lazy val earlyDefs = curly(earlyDef+/semi) ~- 'with
   lazy val earlyDef = (annotation*) ~ (modifier*) ~ (valPatDef | varPatDef) ^~~^ AnnotatedDefinition

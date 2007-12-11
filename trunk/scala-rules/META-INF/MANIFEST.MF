@@ -5,5 +5,5 @@ Bundle-SymbolicName: scala_rules
 Bundle-Version: 0.1.0
 Export-Package: net.foggin.rules,
  net.foggin.rules.scala
-Require-Bundle: scala
+Require-Bundle: ch.epfl.lamp.sdt.compiler
 Eclipse-LazyStart: true
