@@ -3,11 +3,13 @@ Bundle-ManifestVersion: 2
 Bundle-Name: Rule_plugin Plug-in
 Bundle-SymbolicName: rule_plugin; singleton:=true
 Bundle-Version: 0.1
-Require-Bundle: scala, scala_rules, org.eclipse.ui,
+Require-Bundle: scala_rules,
+ org.eclipse.ui,
  org.eclipse.core.runtime,
  org.eclipse.jface.text,
  org.eclipse.ui.editors,
  org.eclipse.core.resources,
- org.eclipse.ui.ide
+ org.eclipse.ui.ide,
+ ch.epfl.lamp.sdt.compiler
 Eclipse-LazyStart: true
 Export-Package: net.foggin.rules.plugin

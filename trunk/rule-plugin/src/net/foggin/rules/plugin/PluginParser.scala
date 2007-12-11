@@ -10,6 +10,8 @@ import org.eclipse.swt.graphics.Color
 import org.eclipse.swt.graphics.RGB
 import org.eclipse.swt.widgets.Display
 
+/*
+  
 case class StyleToken(val start : Int, val end : Int, val attribute : TextAttribute) {
   private var added = false
 
@@ -27,7 +29,8 @@ case class StyleToken(val start : Int, val end : Int, val attribute : TextAttrib
   }
 }
 
-class PluginParser extends scala.ScalaParser[DefaultIncrementalInput] {
+class PluginParser extends scala.ScalaParser[ScalaDocumentInput] {
+  //IncrementalInput.debug = true
 
   private val colours = new _root_.scala.collection.mutable.HashMap[RGB, Color]
 
@@ -51,3 +54,5 @@ class PluginParser extends scala.ScalaParser[DefaultIncrementalInput] {
   val styleToken = memo("styleToken", commentToken | keywordToken | literalToken | otherToken)
   val styleTokens = view(styleToken) _
 }
+
+*/
