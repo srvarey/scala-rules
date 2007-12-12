@@ -25,17 +25,13 @@ class ScalaPresentationReconciler(editor : ScalaEditor) extends IPresentationRec
   val parser = new scala.ScalaParser[ScalaDocumentInput] { }
   
   private var viewer : ITextViewer = null
-  private var scalaDocument : ScalaDocument = null
+  private var input : ScalaDocumentInput = null
   private var damageStart = -1
   private var damageEnd = -1
 
   def damage(from : Int, to : Int) {
     if (damageStart < 0 || from < damageStart) damageStart = from
     if (to > damageEnd) damageEnd = to
-  }
-  
-  class ScalaDocument extends EditableDocument[Char, ScalaDocumentInput] {
-    val first = new ScalaDocumentInput
   }
   
   class ScalaDocumentInput extends IncrementalInput[Char, ScalaDocumentInput] {
@@ -46,15 +42,13 @@ class ScalaPresentationReconciler(editor : ScalaEditor) extends IPresentationRec
       case _ => // do nothing
     }
     
-    override def cleanResults(pos : Int) = {
+    override protected def cleanResults(pos : Int) = {
       map foreach {
         case ((key : AnyRef, _), Success(_, elem)) if elem.index >= pos && attributes.contains(key) => damage(index, elem.index)
         case _ => 
       }
       super.cleanResults(pos)
     }
-    
-    override def toString = "@" + index
   }
 
   def applyStyle(start : Int, end : Int, attribute : TextAttribute) {
@@ -79,7 +73,7 @@ class ScalaPresentationReconciler(editor : ScalaEditor) extends IPresentationRec
      
   private val documentListener = new IDocumentListener {
     def documentAboutToBeChanged(event : DocumentEvent) {
-      scalaDocument.edit(event.getOffset, event.getLength, event.getText)
+      input.edit(event.getOffset, event.getLength, event.getText)
       if (damageEnd > 0) damageEnd = damageEnd - event.getLength + event.getText.length
     }
 
@@ -96,8 +90,8 @@ class ScalaPresentationReconciler(editor : ScalaEditor) extends IPresentationRec
     if (document ne null) {
       document.addDocumentListener(documentListener)
       viewer.addTextListener(textListener)
-      scalaDocument = new ScalaDocument
-      scalaDocument.edit(0, 0, document.get)
+      input = new ScalaDocumentInput
+      input.edit(0, 0, document.get)
       updatePresentation(document)
     }
   }
@@ -107,8 +101,8 @@ class ScalaPresentationReconciler(editor : ScalaEditor) extends IPresentationRec
       if (damageStart > 0 && damageEnd > damageStart) applyStyle(damageStart, damageEnd, DEFAULT)
       damageStart = -1
       damageEnd = -1
-      val input = new scala.ScalaInput(scalaDocument.first)
-      parser.compilationUnit(input)
+      // reparse document
+      parser.compilationUnit(new scala.ScalaInput(input))
     }
   }
   
