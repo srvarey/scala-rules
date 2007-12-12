@@ -1,16 +1,11 @@
 package net.foggin.rules.scala.test
 
 object TestScalaParser extends ScalaParser[DefaultIncrementalInput] with TestScanner {
-  //type Context = TestParserInput[ArrayInput[Char]]
-  
-  //def input(string : String) = new TestParserInput(new ArrayInput[Char](string.toArray))
-  
-  //type Context = IncrementalScalaInput
   
   def input(string : String) = {
-    val document = new DefaultDocument
-    document.edit(0, 0, string)
-    new ScalaInput(document.first)
+    val incrementalInput = new DefaultIncrementalInput
+    incrementalInput.edit(0, 0, string)
+    new ScalaInput(incrementalInput)
   }
   
   checkRule('this)("this" -> "this")

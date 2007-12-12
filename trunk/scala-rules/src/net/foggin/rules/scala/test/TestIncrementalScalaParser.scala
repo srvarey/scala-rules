@@ -2,8 +2,8 @@ package net.foggin.rules.scala.test;
 
 object TestIncrementalScalaParser extends ScalaParser[DefaultIncrementalInput] with Application {
   
-  val document = new DefaultDocument
-  def input = new ScalaInput(document.first)
+  val incrementalInput = new DefaultIncrementalInput
+  val input = new ScalaInput(incrementalInput)
   
   IncrementalInput.debug = true
 
@@ -28,7 +28,7 @@ object TestIncrementalScalaParser extends ScalaParser[DefaultIncrementalInput] w
   }
 
   // set up initial text
-  document.edit(0, 0, """
+  incrementalInput.edit(0, 0, """
     package a.b.c
     
     /** my comment */
@@ -42,7 +42,7 @@ object TestIncrementalScalaParser extends ScalaParser[DefaultIncrementalInput] w
   printCompilationUnit()
 
  // insert something
- document.edit(19, 0, """
+ incrementalInput.edit(19, 0, """
    class Dummy {
      val question = <element with="attribute">and some text</element>
      val answer = 42
