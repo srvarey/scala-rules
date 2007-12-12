@@ -13,21 +13,19 @@ trait ArithmeticEvaluator extends IncrementalScanner {
   
 object ExampleUsage extends ArithmeticEvaluator with Application {
   type Context = DefaultIncrementalInput
-  
-  val document = new DefaultDocument
-  val input = document.first
+  val input = new DefaultIncrementalInput
   
   IncrementalInput.debug = true
   
   // set up initial text and evaluate
-  document.edit(0, 0, "7 + 5 * (5+ 6 / 2 - 1)")
+  input.edit(0, 0, "7 + 5 * (5+ 6 / 2 - 1)")
   println(evaluate(input))
   
    // change to "7 + (5 + 1) * (5+ 6 / 2 - 1)"
-  document.edit(4, 1, "(5 + 1)")
+  input.edit(4, 1, "(5 + 1)")
   println(evaluate(input))
   
    // change to "(5 + 1) * (5+ 6 / 2 - 1)"
-  document.edit(0, 4, "")
+  input.edit(0, 4, "")
   println(evaluate(input))
 }
