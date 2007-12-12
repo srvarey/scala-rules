@@ -8,12 +8,19 @@ import org.eclipse.swt.SWT
 import org.eclipse.swt.custom.StyleRange
 import org.eclipse.swt.graphics.RGB
 
+import _root_.scala.collection.mutable.HashMap
+
 class ScalaPresentationReconciler(editor : ScalaEditor) extends IPresentationReconciler with IPresentationReconcilerExtension {
   
   val DEFAULT = new TextAttribute(editor.colour(new RGB(0, 0, 0)))
   val KEYWORD = new TextAttribute(editor.colour(new RGB(128, 128, 128)), null, SWT.BOLD)
   val LITERAL = new TextAttribute(editor.colour(new RGB(0, 128, 0)))
   val COMMENT = new TextAttribute(editor.colour(new RGB(128, 128, 255)), null, SWT.ITALIC)
+  
+  def attributes = HashMap[AnyRef, TextAttribute](
+      "keyword" -> KEYWORD,
+      "literal" -> LITERAL,
+      "comment" -> COMMENT)
 
   val parser = new scala.ScalaParser[ScalaDocumentInput] { }
   
@@ -32,36 +39,21 @@ class ScalaPresentationReconciler(editor : ScalaEditor) extends IPresentationRec
   class ScalaDocumentInput extends IncrementalInput[Char, ScalaDocumentInput] {
     def element = new ScalaDocumentInput
 
-    override protected def onSuccess[T](key : AnyRef,  result : Success[T, ScalaDocumentInput]) {
-      //println(key + " -> " + result)
-      key match {
-        case ("keyword", _) => keyword(index, result.rest.index)
-        case ("literal", _) => literal(index, result.rest.index)
-        case ("comment", _) => comment(index, result.rest.index)
-        case _ => // do nothing
-      }
+    override protected def onSuccess[T](key : AnyRef,  result : Success[T, ScalaDocumentInput]) = key match {
+      case (realKey : AnyRef, _) if attributes contains realKey => applyStyle(index, result.rest.index, attributes(realKey))
+      case _ => // do nothing
     }
     
     override def cleanResults(pos : Int) = {
       map foreach {
-        case ((key : AnyRef, _), Success(_, elem)) if elem.index >= pos => remove(key, index, elem.index)
+        case ((key : AnyRef, _), Success(_, elem)) if elem.index >= pos && attributes.contains(key) => damage(index, elem.index)
         case _ => 
       }
       super.cleanResults(pos)
     }
     
-    private def remove(key : AnyRef, from : Int, to : Int) = key match {
-      case "keyword" | "literal" | "comment" => damage(from, to)
-      case _ =>
-    }
-    
     override def toString = "@" + index
   }
-
-  def keyword(start : Int, end : Int) = applyStyle(start, end, KEYWORD)
-  def literal(start : Int, end : Int) = applyStyle(start, end, LITERAL)
-  def comment(start : Int, end : Int) = applyStyle(start, end, COMMENT)
-  def default(start : Int, end : Int) = applyStyle(start, end, DEFAULT)
 
   def applyStyle(start : Int, end : Int, attribute : TextAttribute) {
     val style= attribute.getStyle
@@ -113,7 +105,7 @@ class ScalaPresentationReconciler(editor : ScalaEditor) extends IPresentationRec
 
   private def updatePresentation(document : IDocument) {
     if (document ne null) {
-      if (damageStart > 0 && damageEnd > damageStart) default(damageStart, damageEnd)
+      if (damageStart > 0 && damageEnd > damageStart) applyStyle(damageStart, damageEnd, DEFAULT)
       damageStart = -1
       damageEnd = -1
       val input = new scala.ScalaInput(scalaDocument.first)
