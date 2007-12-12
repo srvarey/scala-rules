@@ -17,21 +17,23 @@ class ScalaPresentationReconciler(editor : ScalaEditor) extends IPresentationRec
   val LITERAL = new TextAttribute(editor.colour(new RGB(0, 128, 0)))
   val COMMENT = new TextAttribute(editor.colour(new RGB(128, 128, 255)), null, SWT.ITALIC)
   
-  def attributes = HashMap[AnyRef, TextAttribute](
+  val attributes = HashMap[AnyRef, TextAttribute](
       "keyword" -> KEYWORD,
       "literal" -> LITERAL,
       "comment" -> COMMENT)
 
   val parser = new scala.ScalaParser[ScalaDocumentInput] { }
   
+  private var viewer : ITextViewer = null
+  private var scalaDocument : ScalaDocument = null
+  private var damageStart = -1
+  private var damageEnd = -1
+
   def damage(from : Int, to : Int) {
     if (damageStart < 0 || from < damageStart) damageStart = from
     if (to > damageEnd) damageEnd = to
   }
   
-  var damageStart = -1
-  var damageEnd = -1
-
   class ScalaDocument extends EditableDocument[Char, ScalaDocumentInput] {
     val first = new ScalaDocumentInput
   }
@@ -62,12 +64,9 @@ class ScalaPresentationReconciler(editor : ScalaEditor) extends IPresentationRec
     styleRange.strikeout = (attribute.getStyle & TextAttribute.STRIKETHROUGH) != 0
     styleRange.underline = (attribute.getStyle & TextAttribute.UNDERLINE) != 0
     styleRange.font = attribute.getFont
-    fViewer.getTextWidget.setStyleRange(styleRange)
+    viewer.getTextWidget.setStyleRange(styleRange)
   }
   
-   private var fViewer : ITextViewer = null
-   private var scalaDocument : ScalaDocument = null
-
    private val inputListener = new ITextInputListener {
     def inputDocumentAboutToBeChanged(oldDocument : IDocument, newDocument : IDocument) {
       removeDocument(oldDocument)
@@ -89,14 +88,14 @@ class ScalaPresentationReconciler(editor : ScalaEditor) extends IPresentationRec
    
   private val textListener = new ITextListener {
     def textChanged(e : TextEvent) {
-      if (e.getViewerRedrawState()) updatePresentation(fViewer.getDocument())
+      if (e.getViewerRedrawState()) updatePresentation(viewer.getDocument())
     }
   }
 
   private def setDocument(document : IDocument) {
     if (document ne null) {
       document.addDocumentListener(documentListener)
-      fViewer.addTextListener(textListener)
+      viewer.addTextListener(textListener)
       scalaDocument = new ScalaDocument
       scalaDocument.edit(0, 0, document.get)
       updatePresentation(document)
@@ -115,7 +114,7 @@ class ScalaPresentationReconciler(editor : ScalaEditor) extends IPresentationRec
   
   private def removeDocument(document : IDocument) {
     if (document ne null) {
-      fViewer.removeTextListener(textListener)
+      viewer.removeTextListener(textListener)
       document.removeDocumentListener(documentListener)
     }
   }
@@ -125,15 +124,15 @@ class ScalaPresentationReconciler(editor : ScalaEditor) extends IPresentationRec
 
   // @see IPresentationReconciler#install(ITextViewer)
   def install(viewer : ITextViewer) {
-    fViewer = viewer
-    fViewer.addTextInputListener(inputListener)
+    this.viewer = viewer
+    viewer.addTextInputListener(inputListener)
     setDocument(viewer.getDocument())
   }
 
   // @see IPresentationReconciler#uninstall()
   def uninstall() {
-    fViewer.removeTextInputListener(inputListener)
-    removeDocument(fViewer.getDocument())
+    viewer.removeTextInputListener(inputListener)
+    removeDocument(viewer.getDocument())
   }
 
   // @see IPresentationReconciler#getDamager(String)
