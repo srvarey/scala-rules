@@ -178,15 +178,14 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   val singleLineComment : Rule[String] = "//" -~ (item - newline *) ^^ toString
   lazy val comment = memo("comment", singleLineComment | multiLineComment)
   
-  lazy val literal : Rule[Literal] = endToken("literal", 
-      'null -~ !idChar -^ Null
-      | 'true -~ !idChar -^ True
-      | 'false -~ !idChar -^ False 
-      | characterLiteral 
-      | stringLiteral 
-      | symbolLiteral
-      | floatLiteral
-      | integerLiteral)
+  lazy val literal : Rule[Literal] = ('null -^ Null
+      | 'true -^ True
+      | 'false -^ False 
+      | endToken("literalToken", memo("literal", characterLiteral 
+          | stringLiteral 
+          | symbolLiteral
+          | floatLiteral
+          | integerLiteral)))
     
   val xmlNameStart = (elem('_')
       | unicode(LOWERCASE_LETTER) // Ll
