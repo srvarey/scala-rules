@@ -203,10 +203,45 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | unicode(DECIMAL_DIGIT_NUMBER )) // Nd
       
   val xmlName = xmlNameStart ~++ (xmlNameChar*) ^^ toString
+  val elementName = memo("elementName", xmlName)
+  
   val xmlS = choice(" \t\r\n")+
-  val xmlComment = "<!--" -~ anyChar *~- "-->" ^^ toString ^^ XMLComment
+  val xmlComment = memo("xmlComment", "<!--" -~ anyChar *~- "-->" ^^ toString ^^ XMLComment)
   val resolvedReference = "&amp;" -^ '&' | "&lt;" -^ '<' | "&gt;" -^ '>' | "&apos;" -^ '\'' | "&quot;" -^ '"'
-    
+  
+  val startElement = memo("startElement", '<' -~ (elementName&))
+  val emptyElement = memo("emptyElement", "/>" -^ None)
+  val tagEnd = memo("tagEnd", '>')
+  val endTag = memo("endTag", "</")
+  
+  lazy val xmlExpr = token("xmlExpr", (xmlElement  | cDataSect | pi +) ^^ NodeList, { t : Any => true })
+  lazy val xmlElement = startElement -~ elementName ~ (attribute*) ~- (xmlS?) >~> xmlElementRest
+  def xmlElementRest(name : String, attributes : List[Attribute]) : Rule[XMLElement] = (emptyElement
+      | tagEnd -~ (xmlContent  ^^ Some[Expression]) ~- endElement(name)) ^^ XMLElement(name, attributes)
+  def endElement(name : String) = (endTag -~ elementName ~- (xmlS?) ~- tagEnd) filter (_ == name)
+  lazy val xmlContent : Rule[Expression] = (xmlElement | xmlComment | charData | scalaExpr  | cDataSect | pi | entityRef *) ^^ NodeList
+
+  lazy val xmlPattern = token("xmlPattern", startElement -~ elementName ~- (xmlS?) >> xmlPatternRest, { t : Any => true })
+  def xmlPatternRest(name : String) : Rule[XMLPattern] = (emptyElement
+      | tagEnd -~ xmlPatternContent ~- endElement(name)) ^^ XMLPattern(name)
+  lazy val xmlPatternContent = (xmlPattern | xmlComment | charData | scalaPattern | cDataSect | pi | entityRef *) ^^ NodeList ^^ Some[Expression]
+  lazy val scalaPattern = '{' -~ singleStatement(patterns ^^ TupleExpression) ~- delim('}')
+
+  lazy val cDataSect = "<![CDATA[" -~ anyChar *~- "]]>" ^^ toString ^^ CData
+  lazy val pi = "<?" -~ xmlName ~ (xmlS -~ anyChar *~- "?>" ^^ toString | "?>" -^ "") ^~^ ProcessingInstruction
+  lazy val entityRef = '&' -~ xmlName ~- ';' ^^ EntityRef
+
+  val attributeName = memo("attributeName", xmlS -~ xmlName ~- '=')
+  val attributeValue : Rule[Expression] = quoted('"') | quoted('\'') | scalaExpr
+  def quoted(ch : Char) = memo("attributeValue", ch -~ (resolvedReference | anyChar - choice("<&")) *~- ch ^^ toString ^^ StringLiteral)
+  
+  // Note: changed by me to permit what scalac seems to permit
+  // TODO - raise issue and resolve
+  val scalaExpr = '{' -~ (singleStatement(expr) ~- delim('}') | block ~- delim('}'))
+  
+  val attribute = attributeName ~ attributeValue ^~^ Attribute
+  val charData = ("{{" -^ '{' | resolvedReference | anyChar - ("]]>" | '{' | '<' | '&') +) ^^ toString ^^ TextNode
+  
   val qualId = id+/dot
   val ids = id+/comma
     
@@ -353,28 +388,6 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | (argumentExprs ^^ (ApplyExpression(expr, _))) >> simpleExprRest
       | success(expr))
       
-  lazy val xmlExpr = token("xmlExpr", (xmlElement  | cDataSect | pi +) ^^ NodeList, { t : Any => true })
-  lazy val xmlElement = '<' -~ xmlName ~ (attribute*) ~- (xmlS?) >~> xmlElementRest
-  def xmlElementRest(name : String, attributes : List[Attribute]) : Rule[XMLElement] = ("/>" -^ None
-      | '>' -~ (xmlContent  ^^ Some[Expression]) ~- endElement(name)) ^^ XMLElement(name, attributes)
-  def endElement(name : String) = ("</" -~ xmlName ~- (xmlS?) ~- '>') filter (_ == name)
-  lazy val xmlContent : Rule[Expression] = (xmlElement | xmlComment | charData | scalaExpr  | cDataSect | pi | entityRef *) ^^ NodeList
-
-  lazy val cDataSect = "<![CDATA[" -~ anyChar *~- "]]>" ^^ toString ^^ CData
-  lazy val pi = "<?" -~ xmlName ~ (xmlS -~ anyChar *~- "?>" ^^ toString | "?>" -^ "") ^~^ ProcessingInstruction
-  lazy val entityRef = '&' -~ xmlName ~- ';' ^^ EntityRef
-
-  val attributeName = xmlS -~ xmlName ~- '='
-  val attributeValue : Rule[Expression] = quoted('"') | quoted('\'') | scalaExpr
-  def quoted(ch : Char) = ch -~ (resolvedReference | anyChar - choice("<&")) *~- ch ^^ toString ^^ StringLiteral
-  
-  // Note: changed by me to permit what scalac seems to permit
-  // TODO - raise issue and resolve
-  val scalaExpr = '{' -~ (singleStatement(expr) ~- delim('}') | block ~- delim('}'))
-  
-  val attribute = attributeName ~ attributeValue ^~^ Attribute
-  val charData = ("{{" -^ '{' | resolvedReference | anyChar - ("]]>" | '{' | '<' | '&') +) ^^ toString ^^ TextNode
-  
   lazy val tupleExpr = round(exprs ~- (comma?) | nil) ^^ TupleExpression
   lazy val exprs = expr +/comma
   lazy val argumentExprs = round(exprs ~- (comma?) | nil) | (nl?) -~ blockExpr ^^ (List(_))
@@ -440,12 +453,6 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | prefixExpr  // added by me, but prevents next alternative from succeeding
       | stableId  ^^ (StableIdPattern(_, None, false)))
 
-  lazy val xmlPattern = token("xmlPattern", '<' -~ xmlName ~- (xmlS?) >> xmlPatternRest, { t : Any => true })
-  def xmlPatternRest(name : String) : Rule[XMLPattern] = ("/>" -^ None
-      | '>' -~ xmlPatternContent ~- endElement(name)) ^^ XMLPattern(name)
-  lazy val xmlPatternContent = (xmlPattern | xmlComment | charData | scalaPattern | cDataSect | pi | entityRef *) ^^ NodeList ^^ Some[Expression]
-  lazy val scalaPattern = '{' -~ singleStatement(patterns ^^ TupleExpression) ~- delim('}')
-
   lazy val patterns = pattern+/comma
 
   lazy val typeParamClause : Rule[List[VariantTypeParameter]] = square(variantTypeParam+/comma)
@@ -483,7 +490,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | ('this -^ None) ~ (`:` -~ infixType ^^ Some[Type]) ~- `=>` 
       | success(None) ~ success(None))
   
-  lazy val templateStat = memo("templateStat", importStat
+  lazy val templateStat = (importStat
       | (annotation*) ~ (modifier*) ~ definition ^~~^ AnnotatedDefinition
       | (annotation*) ~ (modifier*) ~ dcl ^~~^ AnnotatedDeclaration
       | expr
