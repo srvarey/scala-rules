@@ -40,7 +40,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   type Context = ScalaInput[T]
   
   /** Treat a symbol as a rule that matches the corresponding keyword */
-  implicit def symbolToKeyword(symbol : Symbol) : Rule[String] = keyword filter (_ == symbol.name)
+  implicit def symbolToKeyword(symbol : Symbol) : Rule[String] = reservedId filter (_ == symbol.name)
    
   /** rule that sets multiple statements status and returns the previous value */
   def multiple(allow : Boolean) = read(_.multipleStatementsAllowed) ~- update(_.multipleStatementsAllowed = allow)
@@ -140,9 +140,9 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   val varId = plainId filter { id => id.charAt(0) isLowerCase }
   val rightOp = plainId filter { id => id.endsWith(":") }
   
-  val keyword = token[String]("keyword", reserved(letter ~++ idRest ^^ toString), canEndStatement)
-  val reservedOp = token[String]("reservedOp", reserved((opChar+) ^^ toString), canEndStatement)
-  val reservedId = keyword | reservedOp
+  val keyword = memo("keyword", reserved(letter ~++ idRest ^^ toString))
+  val reservedOp = reserved((opChar+) ^^ toString)
+  val reservedId = token("reservedId", keyword | reservedOp, canEndStatement)
   
   def reserved(rule : Rule[String]) = rule filter isReserved
   def notReserved(rule : Rule[String]) = rule filter isNotReserved
@@ -214,14 +214,14 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   val tagEnd = memo("tagEnd", '>')
   val endTag = memo("endTag", "</")
   
-  lazy val xmlExpr = token("xmlExpr", (xmlElement  | cDataSect | pi +) ^^ NodeList, { t : Any => true })
+  lazy val xmlExpr = endToken("xmlExpr", (xmlElement  | cDataSect | pi +) ^^ NodeList)
   lazy val xmlElement = startElement -~ elementName ~ (attribute*) ~- (xmlS?) >~> xmlElementRest
   def xmlElementRest(name : String, attributes : List[Attribute]) : Rule[XMLElement] = (emptyElement
       | tagEnd -~ (xmlContent  ^^ Some[Expression]) ~- endElement(name)) ^^ XMLElement(name, attributes)
   def endElement(name : String) = (endTag -~ elementName ~- (xmlS?) ~- tagEnd) filter (_ == name)
   lazy val xmlContent : Rule[Expression] = (xmlElement | xmlComment | charData | scalaExpr  | cDataSect | pi | entityRef *) ^^ NodeList
 
-  lazy val xmlPattern = token("xmlPattern", startElement -~ elementName ~- (xmlS?) >> xmlPatternRest, { t : Any => true })
+  lazy val xmlPattern = endToken("xmlPattern", startElement -~ elementName ~- (xmlS?) >> xmlPatternRest)
   def xmlPatternRest(name : String) : Rule[XMLPattern] = (emptyElement
       | tagEnd -~ xmlPatternContent ~- endElement(name)) ^^ XMLPattern(name)
   lazy val xmlPatternContent = (xmlPattern | xmlComment | charData | scalaPattern | cDataSect | pi | entityRef *) ^^ NodeList ^^ Some[Expression]
@@ -296,7 +296,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val typeArgs = square((typeSpec | `_` -^ TypeDesignator(Nil, "_"))+/comma)
   lazy val types = typeSpec+/comma
 
-  lazy val expr : Rule[Expression] = (bindings | untypedIdBinding) ~- `=>` ~ expr ^~^ FunctionExpression | expr1
+  lazy val expr : Rule[Expression] = memo("expr", (bindings | untypedIdBinding) ~- `=>` ~ expr ^~^ FunctionExpression) | expr1
 
   // TODO : SLS definition for Typed Expression appears wrong.  Have raised ticket #263 - update when outcome known.
   lazy val expr1 : Rule[Expression] = memo("expr1",
@@ -311,8 +311,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | postfixExpr ~- `:` ~ typeSpec ^~^ TypedExpression
       | postfixExpr ~- `:` ~ (annotation+) ^~^ AnnotatedExpression
       | postfixExpr ~- `:` ~- `_` ~- `*` ^^ VarArgExpression
-      | postfixExpr ~- 'match ~ curly(caseClauses) ^~^ MatchExpression
-      | postfixExpr)
+      | postfixExpr ~- 'match ~ curly(caseClauses) ^~^ MatchExpression) | postfixExpr
       
   lazy val assignment = simpleExpr ~- `=` ~ expr ^^? {
     case Name(id) ~ value => SimpleAssignment(id, value)
@@ -320,10 +319,10 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
     case ApplyExpression(expr, args) ~ value => Update(expr, args, value)
   }
     
-  lazy val postfixExpr = memo("postfixExpr", infixExpr ~ id ^~^ PostfixExpression | infixExpr)
+  lazy val postfixExpr = memo("postfixExpr", infixExpr ~ id ^~^ PostfixExpression) | infixExpr
       
   /** InfixExpr ::= PrefixExpr | InfixExpr id [nl] InfixExpr */
-  lazy val infixExpr = memo("infixExpr", infix(operators))
+  lazy val infixExpr = infix(operators)
   
   def infix(operators : List[Rule[(Expression, Expression) => Expression]]) : Rule[Expression] = {
     val op :: tail = operators
@@ -352,7 +351,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
         !first.isLetter && !"_$|^&<>=!:+-*%/".contains(first)
   }
 
-  lazy val prefixExpr = memo("prefixExpr", (plus | minus | bang | tilde) ~ simpleExpr ^~^ PrefixExpression | simpleExpr)
+  lazy val prefixExpr = (plus | minus | bang | tilde) ~ simpleExpr ^~^ PrefixExpression | simpleExpr
 
   /**
   SimpleExpr ::= ‘new’ (ClassTemplate | TemplateBody)
