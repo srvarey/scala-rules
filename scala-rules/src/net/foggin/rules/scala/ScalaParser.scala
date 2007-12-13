@@ -51,7 +51,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   val multipleStatementsAllowed = predicate(_.multipleStatementsAllowed)
   val lastTokenCanEndStatement = predicate(_.lastTokenCanEndStatement)
   
-  def token[T](key : String, rule : Rule[T], f : T => Boolean) : Rule[T] = memo(key, !nl -~ skip -~ rule >> tokenCanEndStatement(f))
+  def token[T](key : String, rule : Rule[T], f : T => Boolean) : Rule[T] = memo(key, !nl -~ skip -~ rule ~- (space*) >> tokenCanEndStatement(f))
   def tokenCanEndStatement[T](f : T => Boolean)(t : T) = update(_.lastTokenCanEndStatement = f(t)) -~ success(t)
   def endToken[T](key : String, rule : Rule[T]) : Rule[T] = token(key, rule, { t : T => true })
   
@@ -70,9 +70,9 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       -~ newline 
       ~- (startStatement &))
 
-  val delimiter = token("delimiter", choice(";.,()[]{}"), delimCanEndStatement)
-  def delimCanEndStatement(ch : Char) = ")]}" contains ch
-  def delim (char : Char) : Rule[Char] = delimiter.filter(_ == char)
+  //val delimiter = token("delimiter", choice(";.,()[]{}"), delimCanEndStatement)
+  //def delimCanEndStatement(ch : Char) = ")]}" contains ch
+  def delim(char : Char) : Rule[Char] = !nl -~ skip -~ char ~- update(_.lastTokenCanEndStatement = ")]}" contains char)
     
   lazy val semi = memo("semi", delim(';') | (nl+))
   lazy val dot = delim('.')
