@@ -64,7 +64,9 @@ class ScalaEditor extends TextEditor {
 
       override protected def onSuccess[T](key : AnyRef,  result : Success[T, ScalaDocumentInput]) = {
         key match {
-          case (realKey : AnyRef, _) if attributes contains realKey => applyStyle(index, result.rest.index, attributes(realKey))
+          case (realKey : AnyRef, _) if attributes contains realKey =>
+              println(realKey + "@" + index + "-" + result.rest.index)
+              applyStyle(index, result.rest.index, attributes(realKey))
           case _ => // do nothing
         }
         super.onSuccess(key, result)
@@ -75,9 +77,9 @@ class ScalaEditor extends TextEditor {
         super.cleanResults(pos)
       }
       
-      override protected def delete(count : Int) = for (_ <- 1 to count) next match {
-        case Success(_, element) => element.damage(index); next = element.next
-        case _ => ()
+      override protected def delete() {
+        if (hasNextElement) nextElement.damage(index)
+        super.delete()
       }
       
       private def damage(pos : Int) = map foreach {
@@ -130,7 +132,6 @@ class ScalaEditor extends TextEditor {
         input = new ScalaDocumentInput
         input.edit(0, 0, document.get)
         updatePresentation(document)
-        //IncrementalInput.debug = true
       }
     }
 
