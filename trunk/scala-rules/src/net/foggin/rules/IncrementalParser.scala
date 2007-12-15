@@ -6,9 +6,13 @@ trait IncrementalScanner extends Scanner with MemoisableRules {
 
 class DefaultIncrementalInput extends IncrementalInput[Char, DefaultIncrementalInput] {
   def element = new DefaultIncrementalInput
+
+  override protected def onSuccess[T](key : AnyRef,  result : Success[T, DefaultIncrementalInput]) { 
+    if(DefaultIncrementalInput.debug) println(key + " -> " + result) 
+  }
 }
 
-object IncrementalInput {
+object DefaultIncrementalInput {
   var debug = false
 }
 
@@ -24,10 +28,6 @@ trait IncrementalInput[A, Context <: IncrementalInput[A, Context]]
   def element : Context
   
   def compare(other : Context) = index - other.index
-
-  override protected def onSuccess[T](key : AnyRef,  result : Success[T, Context]) { 
-    if(IncrementalInput.debug) println(key + " -> " + result) 
-  }
 
   /**
    * Specifies a change to the document.

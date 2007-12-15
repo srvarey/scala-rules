@@ -15,7 +15,7 @@ object ExampleUsage extends ArithmeticEvaluator with Application {
   type Context = DefaultIncrementalInput
   val input = new DefaultIncrementalInput
   
-  IncrementalInput.debug = true
+  DefaultIncrementalInput.debug = true
   
   // set up initial text and evaluate
   input.edit(0, 0, "7 + 5 * (5+ 6 / 2 - 1)")
