@@ -20,6 +20,7 @@ trait IncrementalInput[A, Context <: IncrementalInput[A, Context]]
   var next : Result[A, Context] = Failure[Context]
   var index : Int = 0
 
+  /** Create a new element. */
   def element : Context
   
   def compare(other : Context) = index - other.index
@@ -33,7 +34,7 @@ trait IncrementalInput[A, Context <: IncrementalInput[A, Context]]
    *
    * @param pos number of elements before the change
    * @param deleted number of elements deleted
-   * @param inserted values to insert
+   * @param inserted sequence of values to insert
    */
   def edit(pos : Int, deleted: Int, inserted : Seq[A]) {
     // can do this instead from Scala 2.6.1. on
@@ -44,15 +45,14 @@ trait IncrementalInput[A, Context <: IncrementalInput[A, Context]]
     var finished = false
     while (!finished) {
       if (current.index <= pos) current.cleanResults(pos)
-      if (current.index == pos) current.delete(deleted)
+      if (current.index == pos) current.deleteElements(deleted)
       if (current.index >= pos && values.hasNext) current.insert(values.next)
-            
-      current.next match {
-        case Success(_, element) => 
-          element.index = current.index + 1
-          current = element
-        case _ => 
-          finished = true
+      
+      if (current hasNextElement) {
+        current.nextElement.index = current.index + 1
+        current = current.nextElement
+      } else {
+        finished = true
       }
     }
   }
@@ -61,14 +61,11 @@ trait IncrementalInput[A, Context <: IncrementalInput[A, Context]]
   private def edit(index: Int, pos : Int, deleted: Int, values : Iterator[A]) {
     this.index = index
     if (index <= pos) cleanResults(pos)
-    if (index == pos) delete(deleted)
+    if (index == pos) deleteElements(deleted)
     if (index >= pos && values.hasNext) insert(values.next)
 
     // recursive call to next element
-    next match {
-      case Success(_, element) => element.edit(index + 1, pos, deleted, values)
-      case _ => ()
-    }
+    if (hasNextElement) nextElement.edit(index + 1, pos, deleted, values)
   }
 
   /** Delete all Failure results up to pos
@@ -80,16 +77,26 @@ trait IncrementalInput[A, Context <: IncrementalInput[A, Context]]
   }
 
   /** Delete elements */
-  protected def delete(count : Int) = for (_ <- 1 to count) next match {
-    case Success(_, element) => next = element.next
-    case _ => ()
-  }
+  protected def deleteElements(count : Int) = for (_ <- 1 to count) delete
+  
+  /** Delete current element value */
+  protected def delete() = if (hasNextElement) next = nextElement.next
 
   /** Insert an element */
   protected def insert(value : A) {
     val elem = element
     elem.next = next
     next = Success(value, elem)
+  }
+  
+  protected def hasNextElement = next match {
+    case Success(_, _) => true
+    case _ => false
+  }
+  
+  protected def nextElement = next match {
+    case Success(_, element) => element
+    case _ => throw new RuntimeException("No next element")
   }
   
   override def toString = "@" + index
