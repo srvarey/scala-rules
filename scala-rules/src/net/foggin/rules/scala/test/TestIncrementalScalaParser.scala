@@ -7,15 +7,8 @@ object TestIncrementalScalaParser extends ScalaParser[DefaultIncrementalInput] w
   
   IncrementalInput.debug = true
 
-  val tokens = view((space*) -~ (comment | nl -^ "{nl}" | literal | reservedId | id | delimiter)) _
-
   val line = memo("line", newline -^ "" | (!newline -~ item +) ~- (newline?) ^^ toString)
   val lines = view(line) _
-
-  def printTokens() {
-    println; println("Tokens: ")
-    println(tokens(input).mkString(", "))
-  }
 
   def printCompilationUnit() {
     println; println("Compilation Unit: ")
@@ -37,7 +30,6 @@ object TestIncrementalScalaParser extends ScalaParser[DefaultIncrementalInput] w
     }
     """)
 
-  //printTokens()
   //printLines()
   printCompilationUnit()
 
@@ -49,7 +41,6 @@ object TestIncrementalScalaParser extends ScalaParser[DefaultIncrementalInput] w
    }
    """)
 
-   //printTokens()
    //printLines()
    printCompilationUnit()
 } 
