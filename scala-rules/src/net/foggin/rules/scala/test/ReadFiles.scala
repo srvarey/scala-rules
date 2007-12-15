@@ -7,7 +7,7 @@ object ReadFiles extends ScalaParser[ReaderInput] with Application {
   //process(new File("src/net/foggin/rules"))
   process(new File("../scala-trunk/src/compiler"))
   //process(new File("src/net/foggin/rules/scala/test/TestIncrementalScalaParser.scala"))
-  //process(new File("../scala-trunk/src/compiler/scala/tools/nsc/ScriptRunner.scala"))
+  //process(new File("../scala-trunk/src/compiler/scala/tools/nsc/doc/DocUtil.scala"))
   
   def process(file : File) {
     if (file.isDirectory) file.listFiles().foreach(process)
@@ -32,6 +32,10 @@ object ReadFiles extends ScalaParser[ReaderInput] with Application {
 class ReaderInput(reader : Reader, val index : Int) extends Input[Char, ReaderInput] with DefaultMemoisable[ReaderInput] {
   
   def this(reader : Reader) = this(reader, 0)
+
+  override protected def onSuccess[T](key : AnyRef,  result : Success[T, ReaderInput]) { 
+    //println(key + " -> " + result) 
+  }
 
   lazy val next = reader.read() match {
     case -1 => 
