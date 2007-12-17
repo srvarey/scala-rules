@@ -70,8 +70,6 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       -~ newline 
       ~- (startStatement &))
 
-  //val delimiter = token("delimiter", choice(";.,()[]{}"), delimCanEndStatement)
-  //def delimCanEndStatement(ch : Char) = ")]}" contains ch
   def delim(char : Char) : Rule[Char] = !nl -~ skip -~ char ~- update(_.lastTokenCanEndStatement = ")]}" contains char)
     
   lazy val semi = memo("semi", delim(';') | (nl+))
