@@ -1,16 +1,17 @@
 package net.foggin.rules.plugin
 
-import org.eclipse.ui.editors.text._
-
-import org.eclipse.jface.text._
-import org.eclipse.jface.text.presentation._
-import org.eclipse.jface.text.source._
-
-import org.eclipse.swt.SWT
-import org.eclipse.swt.custom.StyleRange
-import org.eclipse.swt.graphics.Color
-import org.eclipse.swt.graphics.RGB
-import org.eclipse.swt.widgets.Display
+import org.eclipse.jface.text, 
+    text._, 
+    text.presentation._, 
+    text.source._
+import org.eclipse.swt,
+    swt.SWT,
+    swt.custom.StyleRange,
+    swt.graphics.{Color, RGB},
+    swt.widgets.Display
+import org.eclipse.ui,
+    ui.editors.text._,
+    ui.views.contentoutline.IContentOutlinePage
 
 import _root_.scala.collection.mutable.HashMap
 
@@ -20,7 +21,7 @@ class ScalaEditor extends TextEditor {
 
   val DEFAULT = new TextAttribute(colour(new RGB(0, 0, 0)))
   val KEYWORD = new TextAttribute(colour(new RGB(128, 128, 128)), null, SWT.BOLD)
-  val LITERAL = new TextAttribute(colour(new RGB(0, 128, 0)))
+  val LITERAL = new TextAttribute(colour(new RGB(0, 160, 0)))
   val COMMENT = new TextAttribute(colour(new RGB(128, 128, 255)), null, SWT.ITALIC)
   val XML_ELEMENT_NAME = new TextAttribute(colour(new RGB(128, 0, 0)), null, SWT.BOLD)
   val XML_OTHER = new TextAttribute(colour(new RGB(128, 0, 0)))
@@ -41,7 +42,7 @@ class ScalaEditor extends TextEditor {
   def colour(rgb: RGB) = colours.getOrElseUpdate(rgb, new Color(Display.getCurrent(), rgb))
   
   setSourceViewerConfiguration(new SourceViewerConfiguration() {
-    override def getPresentationReconciler(sourceViewer : ISourceViewer) = new ScalaHighlighter
+    override def getPresentationReconciler(sourceViewer : ISourceViewer) = highlighter
   })
   
   setDocumentProvider(new FileDocumentProvider())
@@ -50,6 +51,14 @@ class ScalaEditor extends TextEditor {
     for (colour <- colours.values) colour.dispose()
     super.dispose()
   }
+  
+  override def getAdapter(key : Class) = {
+    if (key == classOf[IContentOutlinePage]) outliner
+    else super.getAdapter(key)
+  }
+  
+  val outliner = new ScalaOutliner(this)
+  val highlighter = new ScalaHighlighter
   
   class ScalaHighlighter extends IPresentationReconciler with IPresentationReconcilerExtension {
     private var viewer : ITextViewer = null
@@ -65,7 +74,7 @@ class ScalaEditor extends TextEditor {
       override protected def onSuccess[T](key : AnyRef,  result : Success[T, ScalaDocumentInput]) = {
         key match {
           case (realKey : AnyRef, _) if attributes contains realKey =>
-              println(realKey + "@" + index + "-" + result.rest.index)
+              //println(realKey + "@" + index + "-" + result.rest.index)
               applyStyle(index, result.rest.index, attributes(realKey))
           case _ => // do nothing
         }
@@ -141,7 +150,10 @@ class ScalaEditor extends TextEditor {
         damageStart = -1
         damageEnd = -1
         // reparse document
-        parser.compilationUnit(new scala.ScalaInput(input))
+        parser.compilationUnit(new scala.ScalaInput(input)) match {
+          case Success(compilationUnit, _) => outliner.show(compilationUnit)
+          case _ =>
+        }
       }
     }
     
