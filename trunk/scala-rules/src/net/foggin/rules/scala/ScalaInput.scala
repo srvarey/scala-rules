@@ -7,6 +7,8 @@ class ScalaInput[T <: Input[Char, T] with Memoisable[T]](val input : T, val stat
 
   def this(input : T) = this(input, ParserState(true, false))
   
+  def index = input.index
+  
   def next = input.next match {
     case Success(ch, input) => Success(ch, new ScalaInput(input, state))
     case _ => Failure[ScalaInput[T]]
