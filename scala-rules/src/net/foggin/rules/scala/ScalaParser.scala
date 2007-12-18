@@ -229,8 +229,8 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val entityRef = '&' -~ xmlName ~- ';' ^^ EntityRef
 
   val attributeName = memo("attributeName", xmlS -~ xmlName ~- '=')
-  val attributeValue : Rule[Expression] = quoted('"') | quoted('\'') | scalaExpr
-  def quoted(ch : Char) = memo("attributeValue", ch -~ (resolvedReference | anyChar - choice("<&")) *~- ch ^^ toString ^^ StringLiteral)
+  val attributeValue : Rule[Expression] = memo("attributeValue", quoted('"') | quoted('\'')) | scalaExpr
+  def quoted(ch : Char) = ch -~ (resolvedReference | anyChar - choice("<&")) *~- ch ^^ toString ^^ StringLiteral
   
   // Note: changed by me to permit what scalac seems to permit
   // TODO - raise issue and resolve
