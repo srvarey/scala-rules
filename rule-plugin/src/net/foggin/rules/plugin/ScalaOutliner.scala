@@ -61,14 +61,16 @@ class ScalaLabelProvider extends LabelProvider {
     case ClassDefinition(false, id, _, _, _, _, _, _) => "class " + id
     case TraitDefinition(id, _, _, _, _) => "trait " + id
     case ImplicitDefinition(definition) => getText(definition)
-    case ValPatternDefinition(patterns, _, _) => "val " + patterns.mkString(", ")
-    case VarPatternDefinition(patterns, _, _) => "var " + patterns.mkString(", ")
+    case ValPatternDefinition(patterns, _, _) => "val " + patterns.map(getText(_)).mkString(", ")
+    case VarPatternDefinition(patterns, _, _) => "var " + patterns.map(getText(_)).mkString(", ")
     case VarDefaultDefinition(ids, _) => "var " + ids.mkString(", ")
     case FunctionDefinition(id, _, _, _, _, _) => "def " + id
     case ProcedureDefinition(id, _, _, _, _) => "def" + id
     case ConstructorDefinition(_, _, _) => "this"
     case TypeDefinition(id, _, _) => "type " + id
     case Packaging(qualId, _) => "package " + qualId.mkString(".")
+    case VariablePattern(id) => id
+    case Name(id) => id
     case _ => super.getText(element)
   }
 }
