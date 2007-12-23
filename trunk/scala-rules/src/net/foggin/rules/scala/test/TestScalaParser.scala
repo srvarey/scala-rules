@@ -2,6 +2,12 @@ package net.foggin.rules.scala.test
 
 object TestScalaParser extends ScalaParser[DefaultIncrementalInput] with TestScanner {
   
+  implicit def anyToElement[T](any : T) = new Element[T] {
+    val value = any
+    val start = 0
+    val length = 0
+  }
+  
   def input(string : String) = {
     val incrementalInput = new DefaultIncrementalInput
     incrementalInput.edit(0, 0, string)
