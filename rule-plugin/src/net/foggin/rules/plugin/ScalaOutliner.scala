@@ -3,7 +3,7 @@ package net.foggin.rules.plugin
 import org.eclipse.core.runtime.IAdaptable
 import org.eclipse.jface, 
     jface.resource.ImageDescriptor, 
-    jface.viewers.{ITreeContentProvider, LabelProvider, Viewer}
+    jface.viewers.{IStructuredSelection, ITreeContentProvider, LabelProvider, SelectionChangedEvent, Viewer}
 import org.eclipse.swt.widgets.Composite
 import org.eclipse.ui.views.contentoutline.ContentOutlinePage
 
@@ -18,6 +18,7 @@ class ScalaContentProvider extends ITreeContentProvider {
 
   // @see org.eclipse.jface.viewers.ITreeContentProvider
   def getChildren(parentElement : Object ) : Array[Object] = parentElement match {
+    case ScalaElement(_, value : Object, _) => getChildren(value)
     case AnnotatedDefinition(_, _, definition) => getChildren(definition)
     case ObjectDefinition(_, _, template) => getChildren(template)
     case ClassDefinition(_, _, _, _, _, _, _, template) => getChildren(template)
@@ -46,6 +47,7 @@ class ScalaContentProvider extends ITreeContentProvider {
 
 class ScalaLabelProvider extends LabelProvider {
   override def getText(element : Object) : String = element match {
+    case ScalaElement(_, value : Object, _) => getText(value)
     case ImportStatement(imports) => "import ..."
     case AnnotatedDeclaration(_, _, declaration) => getText(declaration)
     case ValDeclaration(ids, _) => "val " + ids.mkString(", ")
@@ -85,8 +87,25 @@ class ScalaOutliner(editor : ScalaEditor) extends ContentOutlinePage {
     super.createControl(parent)
     getTreeViewer().setContentProvider(new ScalaContentProvider)
     getTreeViewer().setLabelProvider(new ScalaLabelProvider)
+    getTreeViewer().addSelectionChangedListener(this)
     if (compilationUnit ne null) getTreeViewer().setInput(compilationUnit)
     controlCreated = true
+  }
+  
+  override def selectionChanged(event : SelectionChangedEvent) {
+    super.selectionChanged(event)
+    val selection = event.getSelection().asInstanceOf[IStructuredSelection];
+    if (selection.isEmpty()) editor.resetHighlightRange()
+    else selection.getFirstElement match {
+       case element : ScalaElement[_] => highlight(element)
+       case _ => 
+    }
+  }
+  
+  private def highlight(element : ScalaElement[_]) = try {
+    editor.setHighlightRange(element.start, element.length, true)
+  } catch {
+    case x : IllegalArgumentException =>
   }
 
 }
