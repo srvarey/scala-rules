@@ -1,5 +1,29 @@
 package net.foggin.rules.scala;
 
+object Element {
+  type Position = Input[Char, _]
+}
+
+import Element._
+
+trait Element[T] {
+  def value : T
+  def start : Int
+  def length : Int
+  
+  override def equals(other : Any) = other match {
+    case element : Element[_] => value == element.value
+    case _ => false
+  }
+  
+  override def hashCode = value.hashCode
+}
+
+case class ScalaElement[T](from : Position, value : T, to : Position) extends Element[T] {
+  val start = from.index
+  val length = to.index - start
+}
+
 trait Statement
 case object EmptyStatement extends Statement
 
@@ -222,13 +246,13 @@ case class TraitDefinition(id : String,
     templateBody : Option[TemplateBody]) extends Definition
     
     
-case class TemplateBody(alias : Option[String], selfType : Option[Type], statements : List[Statement]) extends Expression
+case class TemplateBody(alias : Option[String], selfType : Option[Type], statements : List[Element[Statement]]) extends Expression
 
 case class AnnotatedDeclaration(annotations : List[Annotation], modifiers : List[Modifier], declaration : Declaration) extends Statement
 case class AnnotatedDefinition(annotations : List[Annotation], modifiers : List[Modifier], definition : Definition) extends Statement
 
-case class Packaging(qualId : List[String], statements : List[Statement]) extends Statement
+case class Packaging(qualId : List[String], statements : List[Element[Statement]]) extends Statement
 
-case class CompilationUnit(qualId : Option[List[String]], statements : List[Statement]) extends Statement
+case class CompilationUnit(qualId : Option[List[String]], statements : List[Element[Statement]]) extends Statement
     
     

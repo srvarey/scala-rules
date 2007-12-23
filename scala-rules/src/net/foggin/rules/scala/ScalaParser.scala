@@ -51,6 +51,9 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   val multipleStatementsAllowed = predicate(_.multipleStatementsAllowed)
   val lastTokenCanEndStatement = predicate(_.lastTokenCanEndStatement)
   
+  val position = context ^^ (_ input)
+  def element[T](rule : Rule[T]) : Rule[Element[T]] = !nl -~ skip -~ position ~ rule ~ position ~- (space*) ^~~^ ScalaElement[T]
+  
   def token[T](key : String, rule : Rule[T], f : T => Boolean) : Rule[T] = memo(key, !nl -~ skip -~ rule ~- (space*) >> tokenCanEndStatement(f))
   def tokenCanEndStatement[T](f : T => Boolean)(t : T) = update(_.lastTokenCanEndStatement = f(t)) -~ success(t)
   def endToken[T](key : String, rule : Rule[T]) : Rule[T] = token(key, rule, { t : T => true })
@@ -486,7 +489,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
       | ('this -^ None) ~ (`:` -~ infixType ^^ Some[Type]) ~- `=>` 
       | success(None) ~ success(None))
   
-  lazy val templateStat = (importStat
+  lazy val templateStat = element(importStat
       | (annotation*) ~ (modifier*) ~ definition ^~~^ AnnotatedDefinition
       | (annotation*) ~ (modifier*) ~ dcl ^~~^ AnnotatedDeclaration
       | expr
@@ -574,7 +577,7 @@ abstract class ScalaParser[T <: Input[Char, T] with Memoisable[T]] extends Scann
   lazy val earlyDef = (annotation*) ~ (modifier*) ~ (valPatDef | varPatDef) ^~~^ AnnotatedDefinition
 
   lazy val topStatSeq = topStat*/semi
-  lazy val topStat : Rule[Statement] = (importStat
+  lazy val topStat : Rule[Element[Statement]] = element(importStat
       | packaging
       | (annotation*) ~ (modifier*) ~ tmplDef ^~~^ AnnotatedDefinition)
 
