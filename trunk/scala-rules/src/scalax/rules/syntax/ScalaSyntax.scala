@@ -1,48 +1,21 @@
-package net.foggin.rules.scala;
+// -----------------------------------------------------------------------------
+//
+//  Scalax - The Scala Community Library
+//  Copyright (c) 2005-8 The Scalax Project. All rights reserved.
+//
+//  The primary distribution site is http://scalax.scalaforge.org/
+//
+//  This software is released under the terms of the Revised BSD License.
+//  There is NO WARRANTY.  See the file LICENSE for the full text.
+//
+// -----------------------------------------------------------------------------
 
-object Element {
-  type Position = Input[Char, _]
-}
-
-import Element._
-
-trait Element[T] {
-  def value : T
-  def start : Int
-  def length : Int
-  
-  override def equals(other : Any) = other match {
-    case element : Element[_] => value == element.value
-    case _ => false
-  }
-  
-  override def hashCode = value.hashCode
-}
-
-case class ScalaElement[T](from : Position, value : T, to : Position) extends Element[T] {
-  val start = from.index
-  val length = to.index - start
-}
+package scalax.rules.syntax;
 
 trait Statement
 case object EmptyStatement extends Statement
 
 trait Expression extends Statement
-
-sealed abstract class Literal extends Expression
-
-case object Null extends Literal
-case object True extends Literal
-case object False extends Literal
-
-case class CharacterLiteral(char : Char) extends Literal
-case class StringLiteral(string : String) extends Literal
-case class SymbolLiteral(symbol : Symbol) extends Literal
-case class IntegerLiteral(value : Int) extends Literal
-case class LongLiteral(value : Long) extends Literal
-case class FloatLiteral(value : Float) extends Literal
-case class DoubleLiteral(value : Double) extends Literal
-
 
 abstract class PathElement extends Expression
 
@@ -124,8 +97,8 @@ case class AnnotatedType(simpleType : Type, annotations : List[Annotation]) exte
 case class SingletonType(path : List[PathElement]) extends Type
 case class TypeDesignator(path : List[PathElement], id : String) extends Type
 case class TupleType(types : Seq[Type]) extends Type
-case class TypeProjection(simpleType : Type)(id : String) extends Type
-case class ParameterizedType(simpleType : Type)(typeArgs : Seq[Type]) extends Type
+case class TypeProjection(simpleType : Type, id : String) extends Type
+case class ParameterizedType(simpleType : Type, typeArgs : Seq[Type]) extends Type
 
 case class Annotation(typeSpec : Type, args : List[List[Expression]], values : List[(String, Expression)])
 
@@ -246,13 +219,13 @@ case class TraitDefinition(id : String,
     templateBody : Option[TemplateBody]) extends Definition
     
     
-case class TemplateBody(alias : Option[String], selfType : Option[Type], statements : List[Element[Statement]]) extends Expression
+case class TemplateBody(alias : Option[String], selfType : Option[Type], statements : List[Statement]) extends Expression
 
 case class AnnotatedDeclaration(annotations : List[Annotation], modifiers : List[Modifier], declaration : Declaration) extends Statement
 case class AnnotatedDefinition(annotations : List[Annotation], modifiers : List[Modifier], definition : Definition) extends Statement
 
-case class Packaging(qualId : List[String], statements : List[Element[Statement]]) extends Statement
+case class Packaging(qualId : List[String], statements : List[Statement]) extends Statement
 
-case class CompilationUnit(qualId : Option[List[String]], statements : List[Element[Statement]]) extends Statement
+case class CompilationUnit(qualId : Option[List[String]], statements : List[Statement]) extends Statement
     
     

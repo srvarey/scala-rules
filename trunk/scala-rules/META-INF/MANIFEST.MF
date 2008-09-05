@@ -1,9 +1,0 @@
-Manifest-Version: 1.0
-Bundle-ManifestVersion: 2
-Bundle-Name: scala_rules
-Bundle-SymbolicName: scala_rules
-Bundle-Version: 0.1.0
-Export-Package: net.foggin.rules,
- net.foggin.rules.scala
-Require-Bundle: ch.epfl.lamp.sdt.compiler
-Eclipse-LazyStart: true
