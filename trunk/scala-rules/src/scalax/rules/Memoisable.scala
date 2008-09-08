@@ -15,7 +15,7 @@ package scalax.rules
 import scala.collection.mutable.HashMap
 
 trait MemoisableRules extends Rules {
-  def memo[In <: Memoisable, Out, A, X](key : AnyRef, toRule : => In => Result[Out, A, X]) = {
+  def memo[In <: Memoisable, Out, A, X](key : AnyRef)(toRule : => In => Result[Out, A, X]) = {
     lazy val rule = toRule
     from[In] { in => in.memo(key, rule(in)) }
   }

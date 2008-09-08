@@ -98,12 +98,30 @@ trait StateRules {
 
   /** Create a rule that succeeds if all of the given rules succeed.
       @param rules the rules to apply in sequence.
-      @return the results as a list.
   */
   def allOf[A, X](rules : Seq[Rule[A, X]]) = 
     rules.foldRight[Rule[List[A], X]](nil)(_ ~++ _)
 
+  /** Create a rule that succeeds with a list of all the provided rules that succeed.
+      @param rules the rules to apply in sequence.
+  */
+  def anyOf[A, X](rules : Seq[Rule[A, X]]) = allOf(rules.map(_ ?)) ^^ { opts => opts.flatMap(x => x) }
   
+  /** Repeatedly apply a rule from initial value until finished condition is met. */
+  def repeatUntil[T, X](rule : Rule[T => T, X])(finished : T => Boolean)(initial : T) = apply { 
+    // more compact using HoF but written this way so it's tail-recursive
+    def rep(in : S, t : T) : Result[S, T, X] = {
+      if (finished(t)) Success(in, t) 
+      else rule(in) match {
+        case Success(out, f) => rep(out, f(t))
+        case Failure => Failure
+        case Error(x) => Error(x)
+      }
+    }
+    in => rep(in, initial)
+  }
+  
+
 }
 
 trait RulesWithState extends Rules with StateRules {
