@@ -90,5 +90,22 @@ class SeqRule[S, +A, +X](rule : Rule[S, S, A, X]) {
   def *~-[Out, X2 >: X](end : => Rule[S, Out, Any, X2]) = (rule - end *) ~- end
   def +~-[Out, X2 >: X](end : => Rule[S, Out, Any, X2]) = (rule - end +) ~- end
 
+  /** Repeats this rule num times */
+  def times(num : Int) : Rule[S, S, Seq[A], X] = from[S] { 
+    val result = new Array[A](num)
+    // more compact using HoF but written this way so it's tail-recursive
+    def rep(i : Int, in : S) : Result[S, Seq[A], X] = {
+      if (i == num) Success(in, result)
+      else rule(in) match {
+       case Success(out, a) => {
+         result(i) = a
+         rep(i + 1, out)
+       }
+       case Failure => Failure
+       case err : Error[_] => err
+      }
+    }
+    in => rep(0, in)
+  }
 }
 

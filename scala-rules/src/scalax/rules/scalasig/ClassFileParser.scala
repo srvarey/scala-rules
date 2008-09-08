@@ -99,37 +99,7 @@ trait ByteCodeReader extends RulesWithState {
   def bytes(n : Int) = apply(_ next n)
   
   
-  // TODO move to SeqRule class in Rule Combinator library
-  def rep[A, X](rule : Rule[A, X])(num : Int) : Rule[Seq[A], X] = from[S] { 
-    val result = new Array[A](num)
-    def rep(i : Int, in : S) : Result[S, Seq[A], X] = {
-      if (i == num) Success(in, result)
-      else rule(in) match {
-       case Success(out, a) => {
-         result(i) = a
-         rep(i + 1, out)
-       }
-       case Failure => Failure
-       case err : Error[_] => err
-      }
-    }
-    in => rep(0, in)
-  }
   
-  
-  // TODO move to Rule Combinator library
-  def repeatUntil[T](rule : Parser[T => T])(finished : T => Boolean)(initial : T) = apply { 
-    def rep(in : S, t : T) : Result[S, T, String] = rule(in) match {
-      case Success(out, f) => {
-        val ft = f(t)
-        if (finished(t)) Success(out, ft) 
-        else rep(out, ft)
-      }
-      case Failure => Failure
-      case err : Error[_] => err
-    }
-    in => rep(in, initial)
-  }
 }
 
 object ClassFileParser extends ByteCodeReader {
@@ -167,16 +137,16 @@ object ClassFileParser extends ByteCodeReader {
     case 12 => nameAndType
   }
   
-  val interfaces = u2 >> rep(u2)
+  val interfaces = u2 >> u2.times
   
   val attribute = u2 ~ (u4 >> bytes) ^~^ Attribute
-  val attributes = u2 >> rep(attribute)
+  val attributes = u2 >> attribute.times
   
   val field = u2 ~ u2 ~ u2 ~ attributes ^~~~^ Field
-  val fields = u2 >> rep(field)
+  val fields = u2 >> field.times
   
   val method = u2 ~ u2 ~ u2 ~ attributes ^~~~^ Method
-  val methods = u2 >> rep(method)
+  val methods = u2 >> method.times
   
   val header = magicNumber -~ u2 ~ u2 ~ constantPool ~ u2 ~ u2 ~ u2 ~ interfaces ^~~~~~~^ ClassFileHeader
   val classFile = header ~ fields ~ methods ~ attributes ~- !u1 ^~~~^ ClassFile 

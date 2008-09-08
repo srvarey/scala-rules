@@ -16,7 +16,7 @@ object ScalaSigAttributeParsers extends ByteCodeReader  {
   
   val rawBytes = nat >> bytes
   val entry = nat ~ rawBytes
-  val symtab = nat >> rep(entry)
+  val symtab = nat >> entry.times
   val scalaSig = nat ~ nat ~ symtab ^~~^ ScalaSig
 
   val utf8 = read(_ toUTF8String)
@@ -57,13 +57,13 @@ object ScalaSigParsers extends RulesWithState with MemoisableRules {
   val symTab = read(_.table)
   val size = symTab ^^ (_.size)
   
-  def entry(index : Int) = memo(("entry", index), cond(_ hasEntry index) -~ read(_ getEntry index) >-> { entry => Success(entry, entry.entryType) })
+  def entry(index : Int) = memo(("entry", index)) {
+    cond(_ hasEntry index) -~ read(_ getEntry index) >-> { entry => Success(entry, entry.entryType) }
+  }
   
   def parseEntry[A](parser : ScalaSigEntryParsers.EntryParser[A])(index : Int) : Parser[A] = 
     entry(index) -~ parser >> { a => entry => Success(entry.scalaSig, a) }
 
-  def anyOf[A](rules : Seq[Parser[A]]) = allOf(rules.map(_ ?)) ^^ { opts => opts.flatMap(x => x) }
-  
   def allEntries[A](f : ScalaSigEntryParsers.EntryParser[A]) = size >> { n => anyOf((0 until n) map parseEntry(f)) }
 
   lazy val entries = allEntries(ScalaSigEntryParsers.entry) as "entries"
