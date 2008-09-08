@@ -6,19 +6,23 @@
   * Full Scala parser
     * including embedded XML
     * successfully parses all the Scala compiler source
+    * See also the mailing-list announcement: http://www.nabble.com/-scala--Another-parser-for-Scala-tf4936491.html
+
+  * Incomplete parser for ScalaSig attribute in Java class files
+
+= Not Maintained =
+
   * Eclipse plug-in with a simple editor that can highlight Scala:
     * keywords
     * comments
     * literals
     * won't work with XML yet
 
-See also the mailing-list announcement: http://www.nabble.com/-scala--Another-parser-for-Scala-tf4936491.html
 
-
+  
 = Planned =
 
   * Integrate with refactored Scala parser combinator 
-    * planned for Scala release 2.6.2
   * AST rewriting?
   * Suggestions welcome!
     * JavaScript backend for Scala (suggested by Adriaan Moors)
