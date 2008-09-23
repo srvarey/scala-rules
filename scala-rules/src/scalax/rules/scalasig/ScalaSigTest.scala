@@ -10,23 +10,14 @@ object ScalaSigTest {
     //DefaultMemoisable.debug = true
     
     //val byteCode = ByteCode.forClass(classOf[Option[_]]) // pick a class... any class
-    val byteCode = ByteCode.forClass(classOf[Foo[_]])
-    val classFile = ClassFileParser.parse(byteCode)
-
-    /*
-    println("ClassFile version: " + classFile.majorVersion + "." + classFile.minorVersion)
-    println("Class: " + classFile.className)
-    println("Superclass: " + classFile.superClass)
-    println("Interfaces: " + classFile.interfaces.mkString(", "))
-    println("Constant pool:")
-    val constantPool = classFile.header.constants
-    for (i <- 1 to constantPool.size) println(i + "\t" + constantPool(i))
-    */
-
-    val Some(attribute) = classFile.attribute("ScalaSig")
-    val scalaSig = ScalaSigAttributeParsers.parse(attribute.byteCode)
+    //val byteCode = ByteCode.forClass(classOf[Foo[_]])
+    //val classFile = ClassFileParser.parse(byteCode)
+    //val Some(attribute) = classFile.attribute("ScalaSig")
+    //val scalaSig = ScalaSigAttributeParsers.parse(attribute.byteCode)
 
     //println(scalaSig)
+    
+    val Some(scalaSig) = ScalaSigParser.parse(classOf[Foo[_]])
     
     for (c <- scalaSig.topLevelClass) ScalaSigPrinter.printSymbol(c)
     println
