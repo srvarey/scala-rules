@@ -1,5 +1,29 @@
 package scalax.rules.scalasig
 
+object ScalaSigParser {
+  
+  def getScalaSig(clazz : Class[_]) : Option[ByteCode] = {
+    val byteCode = ByteCode.forClass(clazz)
+    val classFile = ClassFileParser.parse(byteCode)
+    
+    /*
+    println("ClassFile version: " + classFile.majorVersion + "." + classFile.minorVersion)
+    println("Class: " + classFile.className)
+    println("Superclass: " + classFile.superClass)
+    println("Interfaces: " + classFile.interfaces.mkString(", "))
+    println("Constant pool:")
+    val constantPool = classFile.header.constants
+    for (i <- 1 to constantPool.size) println(i + "\t" + constantPool(i))
+    */
+    
+    classFile.attribute("ScalaSig").map(_.byteCode)
+  }
+  
+  def parse(clazz : Class[_]) : Option[ScalaSig] = {
+    getScalaSig(clazz).map(ScalaSigAttributeParsers.parse)
+  }
+}
+
 object ScalaSigAttributeParsers extends ByteCodeReader  {
   def parse(byteCode : ByteCode) = expect(scalaSig)(byteCode)
   
@@ -45,6 +69,8 @@ case class ScalaSig(majorVersion : Int, minorVersion : Int, table : Seq[Int ~ By
   override def toString = "ScalaSig version " + majorVersion + "." + minorVersion + {
     for (i <- 0 until table.size) yield i + ":\t" + parseEntry(i) // + "\n\t" + getEntry(i)
   }.mkString("\n", "\n", "")
+  
+  lazy val symbols : Seq[Symbol] = ScalaSigParsers.symbols
   
   lazy val topLevelClass : Option[ClassSymbol] = ScalaSigParsers.topLevelClass
   lazy val topLevelObject : Option[ObjectSymbol] = ScalaSigParsers.topLevelObject
