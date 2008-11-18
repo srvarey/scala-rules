@@ -1,8 +1,12 @@
 package scalax.rules.scalasig
 
-case class Foo[T](bar : T) {
-  @throws(classOf[java.io.IOException])
-  def baz() = "Hello"
+//case class Foo[T](bar : T) {
+//  @throws(classOf[java.io.IOException])
+//  def baz() = "Hello"
+//}
+
+abstract class Foo {
+  final val foo = 32
 }
 
 object ScalaSigTest {
@@ -15,10 +19,12 @@ object ScalaSigTest {
     //val Some(attribute) = classFile.attribute("ScalaSig")
     //val scalaSig = ScalaSigAttributeParsers.parse(attribute.byteCode)
 
-    //println(scalaSig)
     
-    val Some(scalaSig) = ScalaSigParser.parse(classOf[Foo[_]])
-    
+    val Some(scalaSig) = ScalaSigParser.parse(classOf[Foo])
+
+    // print out the symbol table - useful for debugging
+    println(scalaSig)
+
     for (c <- scalaSig.topLevelClass) ScalaSigPrinter.printSymbol(c)
     println
     for (o <- scalaSig.topLevelObject) ScalaSigPrinter.printSymbol(o)
