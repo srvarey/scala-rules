@@ -28,7 +28,7 @@ trait Parsers[T] extends RulesWithState {
 
   def readSeq[C <% Seq[T]](seq : C) = allOf(seq map elem) -^ seq
 
-  def choice[C <% Seq[T]](seq : C) = oneOf(seq map elem)
+  def choice[C <% Seq[T]](seq : C) = oneOf(seq map elem : _*)
 
   /** Allows rules like 'a' to 'z' */
   // the situation after Scala ticket #970 ('a' to 'z' returns RandomAccessSeq.Projection)
