@@ -208,7 +208,7 @@ trait ScalaParser extends Parsers[Token] with MemoisableRules {
 
   lazy val simpleExpr : Parser[Expression] = (newExpr | blockExpr | simpleExpr1) ~>* simpleExprRest
   
-  lazy val simpleExprRest : Parser[Expression => Expression] = (
+  lazy val simpleExprRest : Parser[Expression => Expression] = !semi -~ (
       '.' -~ pathElement ^-^ DotExpression
       | typeArgs ^-^ ExpressionTypeArgs
       | exprArgs)
@@ -252,7 +252,7 @@ trait ScalaParser extends Parsers[Token] with MemoisableRules {
       | ("val" -~ pattern1 ~- '=') ~ expr ^~^ ValEnumerator 
       | deprecatedEnumerator)
       
-  lazy val deprecatedGenerator = "val" -~ pattern1 ~- `<-` ~ expr ~ none ^~~^ Generator
+  lazy val deprecatedGenerator = "val" -~ pattern1 ~- `<-` ~ expr ~ (guard?) ^~~^ Generator
   lazy val deprecatedEnumerator : Parser[Enumerator] = (deprecatedGenerator 
       | (pattern1 ~- '=') ~ expr ^~^ ValEnumerator 
       | postfixExpr ^^ Guard)
